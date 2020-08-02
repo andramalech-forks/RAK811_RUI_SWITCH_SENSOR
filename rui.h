@@ -5,8 +5,8 @@
                 part, AT cmd part, task part sensor part, it can
                 help users to build their app easily and elegantly.
  * @author      Rakwireless
- * @version     2.0
- * @date        2019.6
+ * @version     3.0
+ * @date        2020.4
 ***************************************************************/
 
 #ifndef _RUI_H
@@ -46,6 +46,9 @@ typedef enum{
  RUI_AT_UNSUPPORT,
  RUI_AT_PARAMETER_INVALID,
  RUI_AT_RW_FLASH_ERROR,
+ RUI_AT_GPIO_IRQ_DISABLE,
+ RUI_AT_BUS_INIT_FAIL,
+ RUI_AT_TIMER_FAIL,
  RUI_AT_IIC_RW_ERROR,
  RUI_AT_UART_SEND_ERROR,
 
@@ -53,7 +56,6 @@ typedef enum{
  RUI_AT_BLE_STATUS_OK=40,
  RUI_AT_BLE_ERROR_INVALID_STATE=41,
  RUI_AT_CELLULAR_STATUS_OK=60,
-
  RUI_AT_LORA_BUSY=80,
  RUI_AT_LORA_SERVICE_UNKNOWN,
  RUI_AT_LORA_PARAMETER_INVALID,
@@ -180,7 +182,7 @@ typedef struct RUI_LORAP2P_RECEIVE
     /*!
      * Snr of the received packet
      */
-    int8_t Snr;
+    uint8_t Snr;
 
 } RUI_LORAP2P_RECEIVE_T;
 
@@ -295,9 +297,8 @@ typedef enum RUI_UART_DEF
 
 typedef enum RUI_UART_MODE
 {
-    RUI_UART_NORMAL= 0,
-    RUI_UART_UNVARNISHED,
-    RUI_UART_USER
+    RUI_UART_NORAMAL= 0,
+    RUI_UART_UNVARNISHED
 } RUI_UART_MODE;
 
 typedef enum RUI_UART_BAUDRATE
@@ -335,14 +336,7 @@ typedef struct RUI_LORA_STATUS
     uint8_t autosend_status;
     bool IsJoined;
     bool AdrEnable;
-    bool MulticastEnable;
-    uint32_t multicast_dev_addr;
-    uint8_t multicast_nwks_key[16];
-    uint8_t multicast_apps_key[16];
     uint8_t region[5]; //region string e.g:"EU868"
-    uint8_t uart1_mode;
-    uint8_t uart2_mode;
-    uint8_t uart3_mode;
 } RUI_LORA_STATUS_T;
 
 #define I2C_REG_MAGIC   0xAA
@@ -471,7 +465,7 @@ void rui_uart_recv(RUI_UART_DEF uart_def, uint8_t *pdata, uint16_t len);
  * @brief       This API is used to configure uart work mode.
  * @return      RUI_RETURN_STATUS
  * @param       RUI_UART_DEF uart_def:the instance of uart.
-                RUI_UART_MODE uart_mode: value for RUI_UART_NORMAL,RUI_UART_UNVARNISHED.
+                RUI_UART_MODE uart_mode: value for RUI_UART_NORAMAL,RUI_UART_UNVARNISHED.
 ***************************************************************************************/
 RUI_RETURN_STATUS rui_uart_mode_config(RUI_UART_DEF uart_def,RUI_UART_MODE uart_mode);
 
@@ -741,11 +735,11 @@ RUI_RETURN_STATUS rui_lora_set_channel_mask(uint8_t channel, uint8_t on_off);
 RUI_RETURN_STATUS rui_lora_set_class(RUI_LORA_CLASS_MODE class);
 
 /***************************************************************************************
- * @brief       This API is used to set the send data type.
+ * @brief       This API is used to set the send confirm.
  * @return      RUI_RETURN_STATUS
- * @param       uint8_t is_confirm: 0-unconfirm,1-confirm,2-proprietary
+ * @param       bool is_confirm: true-confirm, false-unconfirm.
 ***************************************************************************************/
-RUI_RETURN_STATUS rui_lora_set_confirm(uint8_t is_confirm);
+RUI_RETURN_STATUS rui_lora_set_confirm(bool is_confirm);
 
 /***************************************************************************************
  * @brief       This API is used to set the ADR for LoRa node.
