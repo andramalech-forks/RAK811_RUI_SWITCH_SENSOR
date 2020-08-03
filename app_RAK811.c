@@ -62,6 +62,13 @@ void app_loop(void)
             /*****************************************************************************
                  * user app loop code
             *****************************************************************************/
+
+	    // testing tx data
+	    a[0]=0xAA;
+	    a[1]=0xFF;
+	    sensor_data_cnt=2;
+
+
             if(sensor_data_cnt != 0)
             {                    
                 sample_flag = true;
