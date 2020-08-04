@@ -12,11 +12,27 @@ RUI_LORA_STATUS_T app_lora_status; //record status
  * 
  * *****************************************************************************************/ 
 
+#define SWITCH_1		3
+#define SWITCH_2		4
+#define SWITCH_3		14
+#define SWITCH_4		16
+#define LED_1			8
+#define BAT_VOLT_CHANNEL	20
+
+static uint8_t diginputs=0x00;
+
 const uint8_t level[2]={0,1};
 #define low     &level[0]
 #define high    &level[1]
 #define  I2C_SDA  19
 #define  I2C_SCL  18
+
+RUI_GPIO_ST Switch_One;
+RUI_GPIO_ST Switch_Two;
+RUI_GPIO_ST Switch_Three;
+RUI_GPIO_ST Switch_Four;
+RUI_GPIO_ST Led_Red;
+RUI_GPIO_ST Bat_Volt;
 
 RUI_I2C_ST I2c_1;
 volatile static bool autosend_flag = false;    //auto send flag
@@ -44,14 +60,64 @@ void bsp_i2c_init(void)
     rui_delay_ms(50);
 
 }
+
+void bsp_di_init(void)
+{
+    Switch_One.pin_num = SWITCH_1;
+    Switch_One.dir = RUI_GPIO_PIN_DIR_INPUT;
+    Switch_One.pull = RUI_GPIO_PIN_PULLUP;
+
+    Switch_Two.pin_num = SWITCH_2;
+    Switch_Two.dir = RUI_GPIO_PIN_DIR_INPUT;
+    Switch_Two.pull = RUI_GPIO_PIN_PULLUP;
+
+    Switch_Three.pin_num = SWITCH_3;
+    Switch_Three.dir = RUI_GPIO_PIN_DIR_INPUT;
+    Switch_Three.pull = RUI_GPIO_PIN_PULLUP;
+
+    Switch_Four.pin_num = SWITCH_4;
+    Switch_Four.dir = RUI_GPIO_PIN_DIR_INPUT;
+    Switch_Four.pull = RUI_GPIO_PIN_PULLUP; 
+
+    rui_gpio_init(&Switch_One);
+    rui_gpio_init(&Switch_Two);
+    rui_gpio_init(&Switch_Three);
+    rui_gpio_init(&Switch_Four);
+}
+
+void bsp_led_init()
+{
+
+    Led_Red.pin_num = LED_1;
+    Led_Red.dir = RUI_GPIO_PIN_DIR_OUTPUT;
+    Led_Red.pull = RUI_GPIO_PIN_NOPULL; 
+    rui_gpio_init(&Led_Red);
+}
+
+void bsp_adc_init()
+{
+
+    Bat_Volt.pin_num = BAT_VOLT_CHANNEL;
+    Bat_Volt.dir = RUI_GPIO_PIN_DIR_INPUT;
+    Bat_Volt.pull = RUI_GPIO_PIN_NOPULL; 
+    rui_adc_init(&Bat_Volt);
+ 
+}
+
 void bsp_init(void)
 {
     bsp_i2c_init();
+
+    bsp_di_init();
+    bsp_adc_init();
+    bsp_led_init();
 }
 
 void app_loop(void)
 {
     static uint8_t sensor_data_cnt=0;  //send data counter by LoRa
+    uint8_t digvalue=0x00;
+    uint8_t digbit;
     rui_lora_get_status(false,&app_lora_status);
     if(app_lora_status.IsJoined)  //if LoRaWAN is joined
     {
@@ -63,10 +129,33 @@ void app_loop(void)
                  * user app loop code
             *****************************************************************************/
 
-	    // testing tx data
-	    a[0]=0xAA;
-	    a[1]=0xFF;
-	    sensor_data_cnt=2;
+	    rui_gpio_rw( RUI_IF_READ, &Switch_One, &digbit );
+            if( digbit == 0 )
+              {digvalue = digvalue | 0x01; }
+
+            rui_gpio_rw( RUI_IF_READ, &Switch_Two, &digbit );            
+	    if( digbit == 0 )
+              {digvalue = digvalue | 0x02; }
+
+            rui_gpio_rw( RUI_IF_READ, &Switch_Three, &digbit );            
+            if( digbit == 0 )
+              {digvalue = digvalue | 0x04; }
+
+            rui_gpio_rw( RUI_IF_READ, &Switch_Four, &digbit );            
+            if( digbit == 0 )
+              {digvalue = digvalue | 0x08; }
+
+
+	    //  LPP frame
+	    a[0]=0x00;		// Digital Inputs	(IPSO 3200)
+	    a[1]=digvalue;
+	    a[2]=0x02;		// Analog Input		(IPSO 3202)
+	    a[3]=0xFF;
+	    a[4]=0xFF;		
+
+
+	    sensor_data_cnt=5;
+	    diginputs=0x00;
 
 
             if(sensor_data_cnt != 0)
