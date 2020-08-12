@@ -48,6 +48,15 @@ void rui_lora_autosend_callback(void)  //auto_send timeout event callback
     IsJoiningflag = false;      
 }
 
+void handle_int_sw1(void)
+{
+        if(diginputs == 0x00)
+        { 
+         diginputs = diginputs | 0x01;
+         autosend_flag = true;
+        }
+}
+
 void bsp_i2c_init(void)
 {
     I2c_1.INSTANCE_ID = 1;
@@ -66,6 +75,7 @@ void bsp_di_init(void)
     Switch_One.pin_num = SWITCH_1;
     Switch_One.dir = RUI_GPIO_PIN_DIR_INPUT;
     Switch_One.pull = RUI_GPIO_PIN_PULLUP;
+    rui_gpio_interrupt(true,Switch_One,RUI_GPIO_EDGE_FALL_RAISE,RUI_GPIO_IRQ_LOW_PRIORITY,handle_int_sw1);
 
     Switch_Two.pin_num = SWITCH_2;
     Switch_Two.dir = RUI_GPIO_PIN_DIR_INPUT;
@@ -116,7 +126,7 @@ void bsp_init(void)
 void app_loop(void)
 {
     static uint8_t sensor_data_cnt=0;  //send data counter by LoRa
-    uint8_t digvalue=0x00;
+    uint8_t digvalue;
     uint8_t digbit;
     rui_lora_get_status(false,&app_lora_status);
     if(app_lora_status.IsJoined)  //if LoRaWAN is joined
@@ -129,22 +139,28 @@ void app_loop(void)
                  * user app loop code
             *****************************************************************************/
 
-	    rui_gpio_rw( RUI_IF_READ, &Switch_One, &digbit );
-            if( digbit == 0 )
-              {digvalue = digvalue | 0x01; }
+	    digvalue=0x00;
 
-            rui_gpio_rw( RUI_IF_READ, &Switch_Two, &digbit );            
-	    if( digbit == 0 )
-              {digvalue = digvalue | 0x02; }
+	    if(diginputs == 0x00 )
+	      {
+	    	rui_gpio_rw( RUI_IF_READ, &Switch_One, &digbit );
+            	if( digbit == 0 )
+              	{digvalue = digvalue | 0x01; }
 
-            rui_gpio_rw( RUI_IF_READ, &Switch_Three, &digbit );            
-            if( digbit == 0 )
-              {digvalue = digvalue | 0x04; }
+            	rui_gpio_rw( RUI_IF_READ, &Switch_Two, &digbit );            
+	    	if( digbit == 0 )
+              	{digvalue = digvalue | 0x02; }
 
-            rui_gpio_rw( RUI_IF_READ, &Switch_Four, &digbit );            
-            if( digbit == 0 )
-              {digvalue = digvalue | 0x08; }
+            	rui_gpio_rw( RUI_IF_READ, &Switch_Three, &digbit );            
+            	if( digbit == 0 )
+              	{digvalue = digvalue | 0x04; }
 
+            	rui_gpio_rw( RUI_IF_READ, &Switch_Four, &digbit );            
+            	if( digbit == 0 )
+              	{digvalue = digvalue | 0x08; }
+              }
+	    else
+	      {digvalue = diginputs;}
 
 	    //  LPP frame
 	    a[0]=0x00;		// Digital Inputs	(IPSO 3200)
