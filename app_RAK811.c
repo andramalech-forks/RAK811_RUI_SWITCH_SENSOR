@@ -50,11 +50,13 @@ void rui_lora_autosend_callback(void)  //auto_send timeout event callback
 
 void handle_int_sw1(void)
 {
-        if(diginputs == 0x00)
-        { 
-         diginputs = diginputs | 0x01;
-         autosend_flag = true;
-        }
+	if(diginputs == 0x00)
+	{
+		diginputs = diginputs | 0x01;
+		autosend_flag = true;
+		IsJoiningflag = false; 
+		RUI_LOG_PRINTF("sw1 int fired! \r\n");
+	}
 }
 
 void bsp_i2c_init(void)
@@ -171,7 +173,7 @@ void app_loop(void)
 
 
 	    sensor_data_cnt=5;
-	    diginputs=0x00;
+	    //diginputs=0x00;
 
 
             if(sensor_data_cnt != 0)
@@ -399,6 +401,9 @@ void bsp_sleep(void)
     /*****************************************************************************
              * user process code before enter sleep
     ******************************************************************************/
+    diginputs=0x00;
+    RUI_LOG_PRINTF("sw1 int active again\r\n");
+
 } 
 void bsp_wakeup(void)
 {
