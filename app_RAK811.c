@@ -36,6 +36,7 @@ RUI_GPIO_ST Bat_Volt;
 
 RUI_I2C_ST I2c_1;
 volatile static bool autosend_flag = false;    //auto send flag
+volatile static bool autsnd_flg = false;	// interrupt mutex
 static uint8_t a[80]={};    // Data buffer to be sent by lora
 bool IsJoiningflag= false;  //flag whether joining or not status
 bool sample_flag = false;  //flag sensor sample record for print sensor data by AT command
@@ -43,14 +44,15 @@ bool sample_flag = false;  //flag sensor sample record for print sensor data by 
 
 
 void rui_lora_autosend_callback(void)  //auto_send timeout event callback
-{
-    autosend_flag = true;
-    IsJoiningflag = false;      
+{	
+    		autosend_flag = true;
+    		IsJoiningflag = false;  
+		//autsnd_flg = true;    
 }
 
 void handle_int_sw1(void)
 {
-	if(diginputs == 0x00)
+	if(diginputs == 0x00 )
 	{
 		diginputs = diginputs | 0x01;
 		autosend_flag = true;
@@ -58,6 +60,40 @@ void handle_int_sw1(void)
 		RUI_LOG_PRINTF("sw1 int fired! \r\n");
 	}
 }
+
+void handle_int_sw2(void)
+{
+        if(diginputs == 0x00  )
+        {
+                diginputs = diginputs | 0x02;
+                autosend_flag = true;
+                IsJoiningflag = false; 
+                RUI_LOG_PRINTF("sw2 int fired! \r\n");
+        }
+}
+
+void handle_int_sw3(void)
+{
+        if(diginputs == 0x00  )
+        {
+                diginputs = diginputs | 0x04;
+                autosend_flag = true;
+                IsJoiningflag = false; 
+                RUI_LOG_PRINTF("sw3 int fired! \r\n");
+        }
+}
+
+void handle_int_sw4(void)
+{
+        if(diginputs == 0x00  )
+        {
+                diginputs = diginputs | 0x08;
+                autosend_flag = true;
+                IsJoiningflag = false; 
+                RUI_LOG_PRINTF("sw4 int fired! \r\n");
+        }
+}
+
 
 void bsp_i2c_init(void)
 {
@@ -82,15 +118,18 @@ void bsp_di_init(void)
     Switch_Two.pin_num = SWITCH_2;
     Switch_Two.dir = RUI_GPIO_PIN_DIR_INPUT;
     Switch_Two.pull = RUI_GPIO_PIN_PULLUP;
+    rui_gpio_interrupt(true,Switch_Two,RUI_GPIO_EDGE_FALL_RAISE,RUI_GPIO_IRQ_LOW_PRIORITY,handle_int_sw2);
 
     Switch_Three.pin_num = SWITCH_3;
     Switch_Three.dir = RUI_GPIO_PIN_DIR_INPUT;
     Switch_Three.pull = RUI_GPIO_PIN_PULLUP;
+    rui_gpio_interrupt(true,Switch_Three,RUI_GPIO_EDGE_FALL_RAISE,RUI_GPIO_IRQ_LOW_PRIORITY,handle_int_sw3);
 
     Switch_Four.pin_num = SWITCH_4;
     Switch_Four.dir = RUI_GPIO_PIN_DIR_INPUT;
     Switch_Four.pull = RUI_GPIO_PIN_PULLUP; 
-
+    rui_gpio_interrupt(true,Switch_Four,RUI_GPIO_EDGE_FALL_RAISE,RUI_GPIO_IRQ_LOW_PRIORITY,handle_int_sw4);
+    
     rui_gpio_init(&Switch_One);
     rui_gpio_init(&Switch_Two);
     rui_gpio_init(&Switch_Three);
@@ -143,30 +182,27 @@ void app_loop(void)
 
 	    digvalue=0x00;
 
-	    if(diginputs == 0x00 )
-	      {
-	    	rui_gpio_rw( RUI_IF_READ, &Switch_One, &digbit );
-            	if( digbit == 0 )
-              	{digvalue = digvalue | 0x01; }
+	    rui_gpio_rw( RUI_IF_READ, &Switch_One, &digbit );
+            if( digbit == 0 )
+            {digvalue = digvalue | 0x01; }
 
-            	rui_gpio_rw( RUI_IF_READ, &Switch_Two, &digbit );            
-	    	if( digbit == 0 )
-              	{digvalue = digvalue | 0x02; }
+            rui_gpio_rw( RUI_IF_READ, &Switch_Two, &digbit );            
+	    if( digbit == 0 )
+            {digvalue = digvalue | 0x02; }
 
-            	rui_gpio_rw( RUI_IF_READ, &Switch_Three, &digbit );            
-            	if( digbit == 0 )
-              	{digvalue = digvalue | 0x04; }
+            rui_gpio_rw( RUI_IF_READ, &Switch_Three, &digbit );            
+            if( digbit == 0 )
+            {digvalue = digvalue | 0x04; }
 
-            	rui_gpio_rw( RUI_IF_READ, &Switch_Four, &digbit );            
-            	if( digbit == 0 )
-              	{digvalue = digvalue | 0x08; }
-              }
-	    else
-	      {digvalue = diginputs;}
+            rui_gpio_rw( RUI_IF_READ, &Switch_Four, &digbit );            
+            if( digbit == 0 )
+            {digvalue = digvalue | 0x08; }
+
+	    digvalue = digvalue | diginputs<<4; 
 
 	    //  LPP frame
 	    a[0]=0x00;		// Digital Inputs	(IPSO 3200)
-	    a[1]=digvalue;
+	    a[1]=digvalue;	// 7-4 irqs fired 3-0 read  value
 	    a[2]=0x02;		// Analog Input		(IPSO 3202)
 	    a[3]=0xFF;
 	    a[4]=0xFF;		
@@ -402,7 +438,8 @@ void bsp_sleep(void)
              * user process code before enter sleep
     ******************************************************************************/
     diginputs=0x00;
-    RUI_LOG_PRINTF("sw1 int active again\r\n");
+    //autsnd_flg = false;
+    RUI_LOG_PRINTF("sw int active again\r\n");
 
 } 
 void bsp_wakeup(void)
