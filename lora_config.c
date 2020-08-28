@@ -3,6 +3,7 @@
 #include "at_cmd.h"
 #include "lora_config.h"
 #include "rui.h"
+#include "sensor.h"
 
 #ifndef SUCCESS
 #define SUCCESS     0
@@ -21,6 +22,8 @@ static uint32_t handle_device_config(RUI_LORA_STATUS_T *config, int argc, char *
 static uint32_t handle_lora_config(RUI_LORA_STATUS_T *config, int argc, char *argv[], char *in);
 static uint32_t handle_lorap2p_config(RUI_LORA_STATUS_T *config, int argc, char *argv[], char *in);
 static uint32_t handle_device_status(void);
+static uint32_t handle_device_get(RUI_LORA_STATUS_T *config, int argc, char *argv[], char *in);
+static uint32_t handle_lora_get(RUI_LORA_STATUS_T *config, int argc, char *argv[], char *in);
 struct board_config_cmd
 {
     char *name;
@@ -53,7 +56,24 @@ struct board_config_cmd cmd_str[]=
     "dr",dr,
     "tx_power",tx_power,
     "adr",adr,
-    "send_interval",send_interval
+    "send_interval",send_interval,
+	"multicastenable",multicastenable,
+    "multicast_dev_addr",multicast_dev_addr,
+    "multicast_apps_key",multicast_apps_key,
+    "multicast_nwks_key",multicast_nwks_key,
+
+    "sys_dev_eui",sys_dev_eui,
+    "sys_app_eui",sys_app_eui,
+    "sys_app_key",sys_app_key,
+    "sys_dev_addr",sys_dev_addr,
+    "sys_apps_key",sys_apps_key,
+    "sys_nwks_key",sys_nwks_key,
+    "sys_multicast_dev_addr",sys_multicast_dev_addr,
+    "sys_multicast_apps_key",sys_multicast_apps_key,
+    "sys_multicast_nwks_key",sys_multicast_nwks_key,
+    "default_parameters",default_parameters,
+    "dutycycle_enable",dutycycle_enable,
+    "send_repeat_cnt",send_repeat_cnt
 };
 /** Structure for registering CONFIG commands */
 struct config_cmd
@@ -71,6 +91,12 @@ struct config_cmd config_cmds[] =
     "device",                handle_device_config,
     "lora",                  handle_lora_config,
     "lorap2p",               handle_lorap2p_config,
+};
+
+struct config_cmd get_cmds[] = 
+{
+    "device",                handle_device_get,
+    "lora",                  handle_lora_get,
 };
 
 static int parse_args(char* str, char* argv[], char **end)
@@ -129,20 +155,20 @@ static int read_config_string(RUI_LORA_STATUS_T *config, const char *in)
         {
             if (argc != 3) 
             {
-                RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                 return FAIL ;
             }
         }else if (argc != 2) 
         {
-            RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+            RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
             return FAIL ;
         }
 
-        for (i = 0; i < sizeof(config_cmds)/sizeof(struct config_cmd); i++) 
+        for (i = 0; i < sizeof(get_cmds)/sizeof(struct config_cmd); i++) 
         {
-            if (strcmp(in, config_cmds[i].name) == 0) 
+            if (strcmp(in, get_cmds[i].name) == 0) 
             {
-                ret = config_cmds[i].function(config,argc - 1,&argv[1], NULL);
+                ret = get_cmds[i].function(config,argc - 1,&argv[1], NULL);
                 if (ret != SUCCESS) 
                 {
                     return ret;
@@ -150,9 +176,9 @@ static int read_config_string(RUI_LORA_STATUS_T *config, const char *in)
                 break;
             }
         }  
-        if (i == sizeof(config_cmds)/sizeof(struct config_cmd)) 
+        if (i == sizeof(get_cmds)/sizeof(struct config_cmd)) 
         {
-            RUI_LOG_PRINTF("ERROR:RUI_AT_UNSUPPORT %d\r\n",RUI_AT_UNSUPPORT);
+            RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_UNSUPPORT);
             return FAIL ;
         }  
     }while(end != NULL); 
@@ -171,13 +197,12 @@ static int write_config_string(RUI_LORA_STATUS_T *config, char *in)
         argc = parse_args(in, argv, &end);
         if (argc <= 2) 
         {
-            if ((strcmp(argv[0], config_cmds[0].name) != 0) && ( (strcmp(argv[0], config_cmds[2].name) != 0)))
+            if ((strcmp(argv[0], config_cmds[0].name) != 0) && ( (strcmp(argv[0], config_cmds[2].name) != 0)) && ((strcmp(argv[1], "default_parameters") != 0)))
             {
-                RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                 return FAIL ;
             }
         }
-
         in = end;
         for (i = 0; i < sizeof(config_cmds)/sizeof(struct config_cmd); i++) 
         {
@@ -193,11 +218,10 @@ static int write_config_string(RUI_LORA_STATUS_T *config, char *in)
         }
         if (i == sizeof(config_cmds)/sizeof(struct config_cmd)) 
         {
-            RUI_LOG_PRINTF("ERROR:RUI_AT_UNSUPPORT %d\r\n",RUI_AT_UNSUPPORT);
+            RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_UNSUPPORT);
             return FAIL ;
         }          
-    }while (end != NULL);
-    
+    }while (end != NULL);   
     return 0; 
 }
 
@@ -222,14 +246,17 @@ int read_config(char *in)
     return ret;
 }
 
-
-static uint32_t handle_device_config(RUI_LORA_STATUS_T *config, int argc, char *argv[], char *in)
+static uint32_t handle_device_get(RUI_LORA_STATUS_T *config, int argc, char *argv[], char *in)
 {
     uint8_t i;
     float x0,y0,z0;
     float f_data;
     RUI_GPIO_ST rui_gpio;
     RUI_UART_BAUDRATE br;
+    RUI_I2C_ST I2c_temp;                
+    I2c_temp.INSTANCE_ID = 1;
+    I2c_temp.PIN_SCL = 18;
+    I2c_temp.PIN_SDA = 19;
 
     for (i = 0; i < sizeof(cmd_str)/sizeof(struct board_config_cmd); i++)
     {
@@ -240,42 +267,176 @@ static uint32_t handle_device_config(RUI_LORA_STATUS_T *config, int argc, char *
     } 
     if (i == sizeof(cmd_str)/sizeof(struct board_config_cmd)) 
     {
-        RUI_LOG_PRINTF("ERROR:RUI_AT_UNSUPPORT %d\r\n",RUI_AT_UNSUPPORT);
+        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_UNSUPPORT);
+        return FAIL ;            
+    }
+    
+    switch(cmd_str[i].board_enum)
+    {
+        case gpio:
+            if(argc == 2)
+            {                
+                uint8_t pinVal;
+                if(atoi(argv[0]) != 0)
+                {
+                    RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL ;
+                }
+                rui_gpio.pin_num = atoi(argv[1]);
+                rui_gpio.dir = RUI_GPIO_PIN_DIR_INPUT;
+                rui_gpio_init(&rui_gpio);
+
+                rui_return_status = rui_gpio_rw(RUI_IF_READ,&rui_gpio,&pinVal);
+                switch(rui_return_status)
+                {
+                    case RUI_STATUS_OK:RUI_LOG_PRINTF("OK %d\r\n", pinVal);
+                        break;
+                    case RUI_STATUS_PARAMETER_INVALID:
+                        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                        return FAIL ;
+                    default:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);return FAIL ;
+                }                
+                // rui_gpio_uninit(&rui_gpio);
+            }else 
+            {
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                return FAIL ;
+            }
+            break;         
+        case adc:
+            if(argc == 2)
+            {
+                uint16_t adc_value;
+                rui_gpio.pin_num = atoi(argv[1]);
+                rui_gpio.dir = RUI_GPIO_PIN_DIR_INPUT;
+
+                rui_return_status = rui_adc_init(&rui_gpio);
+                switch(rui_return_status)
+                {
+                    case RUI_STATUS_OK:break;
+                    case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                        rui_adc_uninit(&rui_gpio);
+                        return FAIL;
+                    default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                        rui_adc_uninit(&rui_gpio);
+                        return FAIL;
+                }
+
+                rui_return_status = rui_adc_get(&rui_gpio,&adc_value);
+                switch(rui_return_status)
+                {
+                    case RUI_STATUS_OK:RUI_LOG_PRINTF("OK %dmV\r\n",adc_value);
+                        rui_adc_uninit(&rui_gpio);
+                        break;
+                    case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                        rui_adc_uninit(&rui_gpio);
+                        return FAIL;
+                    default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                        rui_adc_uninit(&rui_gpio);
+                        return FAIL;
+                }                 
+            }
+            else 
+            {
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                return FAIL ;
+            }
+            break;
+        case status:handle_device_status();
+            break;
+        default :RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_UNSUPPORT);return FAIL ;
+            break;
+    }
+    return SUCCESS;
+
+}
+uint32_t verify_isdigit(uint8_t* data,uint32_t len)
+{
+    for(uint32_t i=0;i<len;i++)
+    {
+        if(isdigit(data[i])==0)
+        {
+            return FAIL ;
+        } 
+    }
+    return SUCCESS;
+}
+static uint32_t handle_device_config(RUI_LORA_STATUS_T *config, int argc, char *argv[], char *in)
+{
+    uint8_t i;
+    float x0,y0,z0;
+    float f_data;
+    RUI_GPIO_ST rui_gpio;
+    RUI_UART_BAUDRATE br;
+    RUI_I2C_ST I2c_temp;                
+    I2c_temp.INSTANCE_ID = 1;
+    I2c_temp.PIN_SCL = 18;
+    I2c_temp.PIN_SDA = 19;
+    for (i = 0; i < sizeof(cmd_str)/sizeof(struct board_config_cmd); i++)
+    {
+        if (strcmp(argv[0], cmd_str[i].name) == 0)
+        {
+            break;
+        }        
+    } 
+    if (i == sizeof(cmd_str)/sizeof(struct board_config_cmd)) 
+    {
+        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_UNSUPPORT);
         return FAIL ;            
     }
     
     switch(cmd_str[i].board_enum)
     {
         case restart:
-            RUI_LOG_PRINTF("OK\r\n");
+            // RUI_LOG_PRINTF("OK \r\n");
             rui_delay_ms(10);
             rui_device_reset();
             break;
         case sleep:
             if(argc != 2)
             {
-                RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                 return FAIL ;
-            }            
+            }
+            if(verify_isdigit(argv[1],strlen(argv[1]))==FAIL)
+            {
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                return FAIL ;
+            } 
+            if(atoi(argv[1])>1) 
+            {
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                return FAIL; 
+            }         
             rui_return_status = rui_device_sleep(atoi(argv[1]));
             switch(rui_return_status)
             {
                 case RUI_STATUS_OK:
                     return SUCCESS;
                 case RUI_LORA_STATUS_BUSY:
-                    RUI_LOG_PRINTF("ERROR: RUI_AT_LORA_BUSY %d\r\n",RUI_AT_LORA_BUSY);
+                    RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_LORA_BUSY);
                     return FAIL;
-                default: RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);return FAIL;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);return FAIL;
             }            
             break; 
         case boot:
-            RUI_LOG_PRINTF("Work in Boot mode now...\r\n");
+            if(argc>1)
+			{
+				RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+				return FAIL ;
+			}
+            RUI_LOG_PRINTF("OK \r\n");
             rui_device_boot();  
             break;  
         case uart:
+            if(verify_isdigit(argv[2],strlen(argv[2]))==FAIL)
+            {
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                return FAIL ;
+            } 
             if(argc != 3)
             {
-                RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                 return FAIL ;
             }else
             {
@@ -297,66 +458,79 @@ static uint32_t handle_device_config(RUI_LORA_STATUS_T *config, int argc, char *
                         break;
                     case 115200:br = BAUDRATE_115200;
                         break;
-                    default:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);return FAIL;
+                    default:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);return FAIL;
                     break;
                 }
                 rui_return_status = rui_uart_init(atoi(argv[1]),br);
                 switch(rui_return_status)
                 {
                     case RUI_STATUS_OK:
-                        RUI_LOG_PRINTF("OK.\r\n");
+                        RUI_LOG_PRINTF("OK \r\n");
                         return SUCCESS;
-                    case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                         return FAIL;
-                    case RUI_STATUS_RW_FLASH_ERROR:RUI_LOG_PRINTF("ERROR: RUI_AT_RW_FLASH_ERROR %d\r\n",RUI_AT_RW_FLASH_ERROR);
+                    case RUI_STATUS_RW_FLASH_ERROR:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_RW_FLASH_ERROR);
                         return FAIL;
                 }                
             }
             break; 
         case uart_mode:
+            if (g_lora_config.work_mode != LORAWAN)
+            {
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_LORA_SERVICE_UNKNOWN);
+                return FAIL ;
+            }
+            if((verify_isdigit(argv[1],strlen(argv[1]))==FAIL) || (verify_isdigit(argv[2],strlen(argv[2]))==FAIL))
+            {
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                return FAIL ;
+            } 
             if(argc != 3)
             {
-                RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                 return FAIL ;
             }else 
             {
-                rui_return_status = rui_uart_mode_config(atoi(argv[1]),atoi(argv[2]));
+                if(atoi(argv[2]) != 1)
+                {
+                    RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL ;   
+                }
+                rui_lora_get_status(false,&app_lora_status);//The query gets the current device status 
+                switch(atoi(argv[1]))
+                {
+                    case RUI_UART1:
+                        if(app_lora_status.uart1_mode == RUI_UART_NORMAL)rui_return_status = rui_uart_mode_config(RUI_UART1,atoi(argv[2]));
+                        else rui_return_status = RUI_STATUS_PARAMETER_INVALID;
+                        break;
+                    case RUI_UART2:
+                        if(app_lora_status.uart2_mode == RUI_UART_NORMAL)rui_return_status = rui_uart_mode_config(RUI_UART2,atoi(argv[2]));
+                        else rui_return_status = RUI_STATUS_PARAMETER_INVALID;
+                        break;
+                    case RUI_UART3:
+                        if(app_lora_status.uart3_mode == RUI_UART_NORMAL)rui_return_status = rui_uart_mode_config(RUI_UART3,atoi(argv[2]));
+                        else rui_return_status = RUI_STATUS_PARAMETER_INVALID;
+                        break;
+                    default:rui_return_status = RUI_STATUS_PARAMETER_INVALID;
+                }
+
                 switch(rui_return_status)
                 {
-                    case RUI_STATUS_OK:RUI_LOG_PRINTF("Uart transparent mode configure success\r\nOK\r\n");                        
+                    case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");                        
                         break;
-                    case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                         return FAIL;
                 }
             }
 
             break;
         case gpio:
-            if(argc == 2)
-            {                
-                uint8_t pinVal;
-                if(atoi(argv[0]) != 0)
-                {
-                    RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
-                    return FAIL ;
-                }
-                rui_gpio.pin_num = atoi(argv[1]);
-                rui_gpio.dir = RUI_GPIO_PIN_DIR_INPUT;
-                rui_gpio_init(&rui_gpio);
-
-                rui_return_status = rui_gpio_rw(RUI_IF_READ,&rui_gpio,&pinVal);
-                switch(rui_return_status)
-                {
-                    case RUI_STATUS_OK:RUI_LOG_PRINTF("Pin level is:%d\r\nOK\r\n", pinVal);
-                        break;
-                    case RUI_STATUS_PARAMETER_INVALID:
-                        RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
-                        return FAIL ;
-                    default:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);return FAIL ;
-                }                
-                // rui_gpio_uninit(&rui_gpio);
-            }
-            else if(argc == 3)
+            if((verify_isdigit(argv[1],strlen(argv[1]))==FAIL) || (verify_isdigit(argv[2],strlen(argv[2]))==FAIL))
+            {
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                return FAIL ;
+            }  
+            if(argc == 3)
             {
                 uint8_t pinVal;
                 pinVal = atoi(argv[2]);
@@ -366,139 +540,117 @@ static uint32_t handle_device_config(RUI_LORA_STATUS_T *config, int argc, char *
                 rui_return_status = rui_gpio_rw(RUI_IF_WRITE,&rui_gpio,&pinVal);
                 switch(rui_return_status)
                 {
-                    case RUI_STATUS_OK:RUI_LOG_PRINTF("OK\r\n");
+                    case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
                         return SUCCESS;
                     case RUI_STATUS_PARAMETER_INVALID:
-                        RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                         rui_gpio_uninit(&rui_gpio);
                         return FAIL ;
                     default:
-                        RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                         rui_gpio_uninit(&rui_gpio);
                         return FAIL ;
                 }
             }
             else 
             {
-                RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                 return FAIL ;
             }
             break;         
-        case adc:
-            if(argc == 2)
-            {
-                uint16_t adc_value;
-                rui_gpio.pin_num = atoi(argv[1]);
-                rui_gpio.dir = RUI_GPIO_PIN_DIR_INPUT;
+        // case i2c:
+        //     if(verify_isdigit(argv[1],strlen(argv[1]))==FAIL)
+		// 	{
+		// 		RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+		// 		return FAIL ;
+		// 	} 
+        //     if(argc == 2)
+        //     {
+        //         switch(atoi(argv[1]))
+        //         {
+        //         case 0: I2c_temp.FREQUENCY = RUI_I2C_FREQ_100K;
+        //             break;
+        //         case 1:I2c_temp.FREQUENCY = RUI_I2C_FREQ_400K;
+        //             break;
+        //         default:
+        //             RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+        //             return FAIL ;
+        //         }
+        //         if(rui_i2c_init(&I2c_temp) == RUI_STATUS_OK)
+        //         {
+        //             RUI_LOG_PRINTF("OK \r\n");
+        //         }
+        //     }else if(argc != 5)
+        //     {
+        //         RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+        //         return FAIL ;
+        //     }else
+        //     {
+        //         uint8_t i2c_data[64]; 
+        //         int app_len;
+        //         char hex_num[3] = {0}; 
+        //         char* send_data;
+        //         if(atoi(argv[1])==0)
+        //         {
+        //             rui_return_status = rui_i2c_rw(&I2c_temp,RUI_IF_READ,strtoul(argv[2],0,16),(uint16_t)strtoul(argv[3],0,16),i2c_data,(uint16_t)atoi(argv[4]));
+        //             switch(rui_return_status)
+        //             {
+        //                 case RUI_STATUS_OK:
+        //                     RUI_LOG_PRINTF("i2cdata: ");                        
+        //                     for(int8_t z=0; z<(uint16_t)atoi(argv[4]); z++)RUI_LOG_PRINTF("%d ",i2c_data[z]);
+        //                     RUI_LOG_PRINTF("OK \r\n");
+        //                     break;
+        //                 case RUI_STATUS_IIC_RW_ERROR:
+        //                     RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_IIC_RW_ERROR);
+        //                     return FAIL;
+        //                 default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);return FAIL;
+        //             }
+        //         }else if(atoi(argv[1])==1)
+        //         {
+        //             app_len = strlen(argv[4]);
+        //             send_data = argv[4];
+        //             if (app_len%2) 
+        //             {
+        //                 RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+        //                 return FAIL ;
+        //             }
 
-                rui_return_status = rui_adc_init(&rui_gpio);
-                switch(rui_return_status)
-                {
-                    case RUI_STATUS_OK:break;
-                    case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
-                        rui_adc_uninit(&rui_gpio);
-                        return FAIL;
-                    default: RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
-                        rui_adc_uninit(&rui_gpio);
-                        return FAIL;
-                }
-
-                rui_return_status = rui_adc_get(&rui_gpio,&adc_value);
-                switch(rui_return_status)
-                {
-                    case RUI_STATUS_OK:RUI_LOG_PRINTF("Voltage: %dmV.\r\nOK\r\n",adc_value);
-                        rui_adc_uninit(&rui_gpio);
-                        break;
-                    case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
-                        rui_adc_uninit(&rui_gpio);
-                        return FAIL;
-                    default: RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
-                        rui_adc_uninit(&rui_gpio);
-                        return FAIL;
-                }                 
-            }
-            else 
-            {
-                RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
-                return FAIL ;
-            }
-            break;
-        case i2c:
-            if(argc != 5)
-            {
-                RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
-                return FAIL ;
-            }else
-            {
-                uint8_t i2c_data[64]; 
-                int app_len;
-                char hex_num[3] = {0}; 
-                char* send_data;
-                RUI_I2C_ST I2c_temp;
-                I2c_temp.INSTANCE_ID = 1;
-                if(atoi(argv[1])==0)
-                {
-                    rui_return_status = rui_i2c_rw(&I2c_temp,RUI_IF_READ,strtoul(argv[2],0,16),(uint16_t)strtoul(argv[3],0,16),i2c_data,(uint16_t)atoi(argv[4]));
-                    switch(rui_return_status)
-                    {
-                        case RUI_STATUS_OK:
-                            RUI_LOG_PRINTF("i2cdata: ");                        
-                            for(int8_t z=0; z<(uint16_t)atoi(argv[4]); z++)RUI_LOG_PRINTF("%d ",i2c_data[z]);
-                            RUI_LOG_PRINTF("\r\nOK\r\n");
-                            break;
-                        case RUI_STATUS_IIC_RW_ERROR:
-                            RUI_LOG_PRINTF("ERROR: RUI_AT_IIC_RW_ERROR %d\r\n",RUI_AT_IIC_RW_ERROR);
-                            return FAIL;
-                        default: RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);return FAIL;
-                    }
-                }else if(atoi(argv[1])==1)
-                {
-                    app_len = strlen(argv[4]);
-                    send_data = argv[4];
-                    if (app_len%2) 
-                    {
-                        RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
-                        return FAIL ;
-                    }
-
-                    for (int i = 0; i < app_len; i++) 
-                    {
-                        if (!isxdigit(send_data[i])) 
-                        {
-                            RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
-                            return FAIL ;   
-                        }
-                    }
+        //             for (int i = 0; i < app_len; i++) 
+        //             {
+        //                 if (!isxdigit(send_data[i])) 
+        //                 {
+        //                     RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+        //                     return FAIL ;   
+        //                 }
+        //             }
                     
-                    app_len = app_len/2;
-                    for (int i = 0; i < app_len; i++) 
-                    {
-                        memcpy(hex_num, &send_data[i*2], 2);
-                        i2c_data[i] = strtoul(hex_num, NULL, 16);
-                    }
+        //             app_len = app_len/2;
+        //             for (int i = 0; i < app_len; i++) 
+        //             {
+        //                 memcpy(hex_num, &send_data[i*2], 2);
+        //                 i2c_data[i] = strtoul(hex_num, NULL, 16);
+        //             }
 
-                    rui_return_status = rui_i2c_rw(&I2c_temp,RUI_IF_WRITE,strtoul(argv[2],0,16),(uint16_t)strtoul(argv[3],0,16),i2c_data,(uint16_t)atoi(argv[4]));
-                    switch(rui_return_status)
-                    {
-                        case RUI_STATUS_OK:
-                            RUI_LOG_PRINTF("OK\r\n");
-                            return SUCCESS;
-                        case RUI_STATUS_IIC_RW_ERROR:
-                            RUI_LOG_PRINTF("ERROR: RUI_AT_IIC_RW_ERROR %d\r\n",RUI_AT_IIC_RW_ERROR);
-                            return FAIL;
-                        default: RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);return FAIL;
-                    }                    
-                }else
-                {
-                    RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
-                    return FAIL ;
-                }
+        //             rui_return_status = rui_i2c_rw(&I2c_temp,RUI_IF_WRITE,strtoul(argv[2],0,16),(uint16_t)strtoul(argv[3],0,16),i2c_data,(uint16_t)atoi(argv[4]));
+        //             switch(rui_return_status)
+        //             {
+        //                 case RUI_STATUS_OK:
+        //                     RUI_LOG_PRINTF("OK \r\n");
+        //                     return SUCCESS;
+        //                 case RUI_STATUS_IIC_RW_ERROR:
+        //                     RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_IIC_RW_ERROR);
+        //                     return FAIL;
+        //                 default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);return FAIL;
+        //             }                    
+        //         }else
+        //         {
+        //             RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+        //             return FAIL ;
+        //         }
                                
-            }            
-            break;
-        case status:handle_device_status();
-            break;
-        default :RUI_LOG_PRINTF("ERROR: RUI_AT_UNSUPPORT %d\r\n",RUI_AT_UNSUPPORT);return FAIL ;
+        //     }            
+        //     break;
+        default :RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_UNSUPPORT);return FAIL ;
             break;
     }
     return SUCCESS;
@@ -510,16 +662,16 @@ static int verify_config_data(uint8_t argc,char* buffer,char len,char* lora_id)
     char hex_num[3] = {0};
     if (argc != 2) 
     {
-        RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
         return FAIL ;
     }             
     if (strlen(buffer) != 2*len) {
-        RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
         return FAIL ;
     }
     for (int i = 0; i < 2*len; i++) {
         if (!isxdigit(buffer[i])) {
-            RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+            RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
             return FAIL ;    
         }
     }
@@ -529,6 +681,40 @@ static int verify_config_data(uint8_t argc,char* buffer,char len,char* lora_id)
     }
    return SUCCESS;
 }
+
+static uint32_t handle_lora_get(RUI_LORA_STATUS_T *config, int argc, char *argv[], char *in)
+{
+    uint8_t i;
+    char lora_id[32];
+    RUI_LORA_STATUS_T* st;
+
+    for (i = 0; i < sizeof(cmd_str)/sizeof(struct board_config_cmd); i++)
+    {
+        if (strcmp(argv[0], cmd_str[i].name) == 0)
+        {
+            break;
+        }        
+    }
+    if (i == sizeof(cmd_str)/sizeof(struct board_config_cmd)) 
+    {
+        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_UNSUPPORT);
+        return FAIL ;
+    }     
+
+   switch(cmd_str[i].board_enum)
+    {
+        case channel:rui_return_status = rui_get_channel_list();
+            break;
+        case status:
+            rui_return_status = rui_lora_get_status(true,st);
+            break;
+        default :RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_UNSUPPORT);
+            return FAIL ;
+            break;
+    }  
+    return SUCCESS;  
+}
+
 
 static uint32_t handle_lora_config(RUI_LORA_STATUS_T *config, int argc, char *argv[], char *in)
 {
@@ -545,25 +731,25 @@ static uint32_t handle_lora_config(RUI_LORA_STATUS_T *config, int argc, char *ar
     }
     if (i == sizeof(cmd_str)/sizeof(struct board_config_cmd)) 
     {
-        RUI_LOG_PRINTF("ERROR: RUI_AT_UNSUPPORT %d\r\n",RUI_AT_UNSUPPORT);
+        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_UNSUPPORT);
         return FAIL ;
     }     
-
+// UartPrint("isdigit:%d, argv[1]:%d\r\n",isdigit(argv[1][0]),atoi(argv[1]));
    switch(cmd_str[i].board_enum)
     {
         case region:
             rui_lora_get_status(false,&app_lora_status);
             if ( 0==strcmp(argv[1], app_lora_status.region)) 
             { 
-                RUI_LOG_PRINTF("Selected LoRaWAN 1.0.2 Region: %s\r\n",app_lora_status.region);
-                RUI_LOG_PRINTF("Band switch success\r\nOK\r\n");
+                // RUI_LOG_PRINTF("Selected LoRaWAN 1.0.2 Region: %s\r\n",app_lora_status.region);
+                RUI_LOG_PRINTF("OK \r\n");
                 return SUCCESS;
             } 
             else 
             {	
                 if (rw_String2Region(argv[1]) == 100) 
                 {
-                    RUI_LOG_PRINTF("ERROR: RUI_AT_LORA_REGION_NOT_SUPPORTED %d\r\n",RUI_AT_LORA_REGION_NOT_SUPPORTED);
+                    RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_LORA_REGION_NOT_SUPPORTED);
                     return FAIL;
                 }
                 else
@@ -571,11 +757,11 @@ static uint32_t handle_lora_config(RUI_LORA_STATUS_T *config, int argc, char *ar
                     rui_return_status = rui_lora_set_region(rw_String2Region(argv[1]));
                     switch(rui_return_status)
                     {
-                        case RUI_STATUS_OK:	RUI_LOG_PRINTF("Band switch success\r\nOK\r\n");
+                        case RUI_STATUS_OK:	RUI_LOG_PRINTF("OK \r\n");
                             return SUCCESS;
-                        case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                        case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                             return FAIL;
-                        default: RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                        default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                             return FAIL;
                     } 
                 }                
@@ -591,9 +777,9 @@ static uint32_t handle_lora_config(RUI_LORA_STATUS_T *config, int argc, char *ar
             rui_return_status = rui_lora_set_dev_eui(lora_id);
             switch(rui_return_status)
             {
-                case RUI_STATUS_OK:RUI_LOG_PRINTF("LoRa dev_eui configure success\r\nOK\r\n");
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
                     return SUCCESS;
-                default: RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                     return FAIL;
             } 
             break;
@@ -602,9 +788,9 @@ static uint32_t handle_lora_config(RUI_LORA_STATUS_T *config, int argc, char *ar
             rui_return_status = rui_lora_set_app_eui(lora_id);
             switch(rui_return_status)
             {
-                case RUI_STATUS_OK:RUI_LOG_PRINTF("LoRa app_eui configure success\r\nOK\r\n");
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
                     return SUCCESS;
-                default: RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                     return FAIL;
             } 
             break;
@@ -613,9 +799,9 @@ static uint32_t handle_lora_config(RUI_LORA_STATUS_T *config, int argc, char *ar
             rui_return_status = rui_lora_set_app_key(lora_id);
             switch(rui_return_status)
             {
-                case RUI_STATUS_OK:RUI_LOG_PRINTF("LoRa app_key configure success\r\nOK\r\n");
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
                     return SUCCESS;
-                default: RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                     return FAIL;
             }         
             break;
@@ -624,9 +810,9 @@ static uint32_t handle_lora_config(RUI_LORA_STATUS_T *config, int argc, char *ar
             rui_return_status = rui_lora_set_dev_addr(lora_id); 
             switch(rui_return_status)
             {
-                case RUI_STATUS_OK:RUI_LOG_PRINTF("LoRa dev_addr configure success\r\nOK\r\n");
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
                     return SUCCESS;
-                default: RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                     return FAIL;
             }    
             break;
@@ -635,9 +821,9 @@ static uint32_t handle_lora_config(RUI_LORA_STATUS_T *config, int argc, char *ar
             rui_return_status = rui_lora_set_apps_key(lora_id);
             switch(rui_return_status)
             {
-                case RUI_STATUS_OK:RUI_LOG_PRINTF("LoRa apps_key configure success\r\nOK\r\n");
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
                     return SUCCESS;
-                default: RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                     return FAIL;
             }    
             break;
@@ -646,89 +832,177 @@ static uint32_t handle_lora_config(RUI_LORA_STATUS_T *config, int argc, char *ar
             rui_return_status = rui_lora_set_nwks_key(lora_id);
             switch(rui_return_status)
             {
-                case RUI_STATUS_OK:RUI_LOG_PRINTF("LoRa nwks_key configure success\r\nOK\r\n");
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
                     return SUCCESS;
-                default: RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                     return FAIL;
             }             
+            break;
+        case multicast_dev_addr:
+            if(verify_config_data(argc,argv[1],4,lora_id) != SUCCESS)return FAIL ;
+            rui_return_status = rui_lora_set_multicast_dev_addr(lora_id);
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                    return SUCCESS;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL;
+            }
+            break;
+        case multicast_apps_key:
+            if(verify_config_data(argc,argv[1],16,lora_id) != SUCCESS)return FAIL ;
+            rui_return_status = rui_lora_set_multicast_apps_key(lora_id);
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                    return SUCCESS;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL;
+            }
+            break;
+        case multicast_nwks_key:
+            if(verify_config_data(argc,argv[1],16,lora_id) != SUCCESS)return FAIL ;
+            rui_return_status = rui_lora_set_multicast_nwks_key(lora_id);
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                    return SUCCESS;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL;
+            }
+            break;
+        case multicastenable:
+            if(verify_isdigit(argv[1],strlen(argv[1]))==FAIL)
+			{
+				RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+				return FAIL ;
+			} 
+            if(atoi(argv[1])>1)
+            {
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                return FAIL;
+            }
+            rui_return_status = rui_lora_set_multicastenable(atoi(argv[1]));
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");                          
+                    break;  
+                default:RUI_LOG_PRINTF("ERROR: %d\r\n",rui_return_status);
+                    return FAIL; 
+            }               
             break;                
         case join_mode:
+            if(verify_isdigit(argv[1],strlen(argv[1]))==FAIL)
+			{
+				RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+				return FAIL ;
+			} 
             rui_return_status = rui_lora_set_join_mode(atoi(argv[1]));
             switch(rui_return_status)
             {
                 case RUI_STATUS_OK:
                     switch(atoi(argv[1]))
                     {
-                        case RUI_OTAA:RUI_LOG_PRINTF("LoRa configure OTAA success\r\nOK\r\n");
+                        case RUI_OTAA:RUI_LOG_PRINTF("OK \r\n");
                             break;
-                        case RUI_ABP:RUI_LOG_PRINTF("LoRa configure ABP success\r\nOK\r\n");
+                        case RUI_ABP:RUI_LOG_PRINTF("OK \r\n");
                             break;
                     }
                     break;  
-                default:RUI_LOG_PRINTF("ERROR: LORA_STATUS_ERROR %d\r\n",rui_return_status);
+                default:RUI_LOG_PRINTF("ERROR: %d\r\n",rui_return_status);
                     return FAIL; 
             }               
             break;
         case work_mode:
+            if(verify_isdigit(argv[1],strlen(argv[1]))==FAIL)
+			{
+				RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+				return FAIL ;
+			} 
+            // if(g_lora_config.work_mode == atoi(argv[1]))
+            // {
+            //     RUI_LOG_PRINTF("OK \r\n");
+            //     return SUCCESS;
+            // }
+            if(atoi(argv[1])>1)
+            {
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                return FAIL;
+            }
             rui_return_status = rui_lora_set_work_mode(atoi(argv[1]));
             switch(rui_return_status)
             {
                 case RUI_STATUS_OK:
                     switch (atoi(argv[1]))
                     {
-                        case RUI_LORAWAN:RUI_LOG_PRINTF("LoRa configure LoRaWAN success\r\nOK\r\nReset now...\r\n");
+                        case RUI_LORAWAN:
                             rui_device_reset();
                             break;	
-                        case RUI_P2P:RUI_LOG_PRINTF("LoRa configure LoRaP2P success\r\nOK\r\nReset now...\r\n");
+                        case RUI_P2P:
                             rui_device_reset();
                             break;	
-                        default:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                        default:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                             return FAIL;
                     }
                     return SUCCESS;
-                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                     return FAIL;
-                default: RUI_LOG_PRINTF("ERROR: LORA_STATUS_ERROR %d\r\n",rui_return_status);
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",rui_return_status);
                     return FAIL;
             }        
             break;
         case ch_mask:
+            if((verify_isdigit(argv[1],strlen(argv[1]))==FAIL) || (verify_isdigit(argv[2],strlen(argv[2]))==FAIL))
+            {
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                return FAIL ;
+            }
             rui_return_status = rui_lora_set_channel_mask(atoi(argv[1]),atoi(argv[2]));
             switch(rui_return_status)
             {
-                case RUI_STATUS_OK:RUI_LOG_PRINTF("LoRa channel mask configure success\r\nOK\r\n");
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
                     return SUCCESS;
-                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                     return FAIL;
-                default: RUI_LOG_PRINTF("ERROR: LORA_STATUS_ERROR %d\r\n",rui_return_status);
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",rui_return_status);
                     return FAIL;
             } 
             break;
         case class:
+            if(verify_isdigit(argv[1],strlen(argv[1]))==FAIL)
+			{
+				RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+				return FAIL ;
+			}
             rui_return_status = rui_lora_set_class(atoi(argv[1]));
             switch(rui_return_status)
             {
                 case RUI_STATUS_OK:
                     switch(atoi(argv[1]))
                     {
-                        case RUI_CLASS_A:RUI_LOG_PRINTF("LoRa configure ClassA success\r\nOK\r\n");
+                        case RUI_CLASS_A:RUI_LOG_PRINTF("OK \r\n");
                             break;
-                        case RUI_CLASS_B:RUI_LOG_PRINTF("LoRa configure ClassB success\r\nOK\r\n");
+                        case RUI_CLASS_B:RUI_LOG_PRINTF("OK \r\n");
                             break;
-                        case RUI_CLASS_C:RUI_LOG_PRINTF("LoRa configure ClassC success\r\nOK\r\n");
+                        case RUI_CLASS_C:RUI_LOG_PRINTF("OK \r\n");
                             break;
                     }
                     return SUCCESS;
-                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                     return FAIL;
-                default: RUI_LOG_PRINTF("ERROR: LORA_STATUS_ERROR %d\r\n",rui_return_status);
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",rui_return_status);
                     return FAIL;
             }                     
             break;
-        case confirm: 
-        	if(atoi(argv[1]) > 1)
+        case confirm:
+            if(verify_isdigit(argv[1],strlen(argv[1]))==FAIL)
+			{
+				RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+				return FAIL ;
+			} 
+        	if(atoi(argv[1]) > 2)
             {
-                RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                 return FAIL;
             }
             rui_return_status = rui_lora_set_confirm(atoi(argv[1]));
@@ -737,74 +1011,100 @@ static uint32_t handle_lora_config(RUI_LORA_STATUS_T *config, int argc, char *ar
                 case RUI_STATUS_OK:
                     switch(atoi(argv[1]))
                     {
-                        case 0:RUI_LOG_PRINTF("LoRa configure unconfirm success\r\nOK\r\n");
+                        case 0:
+                        case 1:
+                        case 2:
+                            RUI_LOG_PRINTF("OK \r\n");
                             break;
-                        case 1:RUI_LOG_PRINTF("LoRa configure confirm success\r\nOK\r\n");
-                            break;
-                        default: RUI_LOG_PRINTF("ERROR: LORA_STATUS_ERROR %d\r\n",rui_return_status);
+                        default: RUI_LOG_PRINTF("ERROR: %d\r\n",rui_return_status);
                             return FAIL;
                     }
                     break; 
-                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                     return FAIL;
-                default: RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                     return FAIL;
             }      
             break;   
         case dr:
+            if(verify_isdigit(argv[1],strlen(argv[1]))==FAIL)
+			{
+				RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+				return FAIL ;
+			}
             rui_return_status = rui_lora_set_dr(atoi(argv[1]));
             switch(rui_return_status)
             {
-                case RUI_STATUS_OK:RUI_LOG_PRINTF("LoRa configure DR%d success\r\nOK\r\n",atoi(argv[1]));
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n",atoi(argv[1]));
                     return SUCCESS;
-                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                     return FAIL;
-                default: RUI_LOG_PRINTF("ERROR: LORA_STATUS_ERROR %d\r\n",rui_return_status);
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",rui_return_status);
                     return FAIL;
             }        
             break;        
         case adr:
+            if(verify_isdigit(argv[1],strlen(argv[1]))==FAIL)
+			{
+				RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+				return FAIL ;
+			}
+            if(atoi(argv[1])>1)
+            {
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                return FAIL;
+            }
             rui_return_status = rui_lora_set_adr(atoi(argv[1]));
             switch(rui_return_status)
             {
                 case RUI_STATUS_OK:
                     switch(atoi(argv[1]))
                     {
-                        case 0:RUI_LOG_PRINTF("LoRa configure adr disable success\r\nOK\r\n");
+                        case 0:RUI_LOG_PRINTF("OK \r\n");
                             break;
-                        case 1:RUI_LOG_PRINTF("LoRa configure adr enable success\r\nOK\r\n");
+                        case 1:RUI_LOG_PRINTF("OK \r\n");
                             break;
                         default:
                             break;
                     }
                     return SUCCESS;
-                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                     return FAIL;
-                default: RUI_LOG_PRINTF("ERROR: LORA_STATUS_ERROR %d\r\n",rui_return_status);
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",rui_return_status);
                     return FAIL;
             }         
             break; 
         case tx_power:
+            if(verify_isdigit(argv[1],strlen(argv[1]))==FAIL)
+			{
+				RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+				return FAIL ;
+			}
             rui_return_status = rui_lora_set_tx_power(atoi(argv[1]));
             switch(rui_return_status)
             {
-                case RUI_STATUS_OK:RUI_LOG_PRINTF("LoRa configure tx_power%d success\r\nOK\r\n",atoi(argv[1]));
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
                     return SUCCESS;
-                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                     return FAIL;
-                default: RUI_LOG_PRINTF("ERROR: LORA_STATUS_ERROR %d\r\n",rui_return_status);
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",rui_return_status);
                     return FAIL;
             } 
             break; 
-        case send_interval: 
+        case send_interval:
+            if((verify_isdigit(argv[1],strlen(argv[1]))==FAIL) || (verify_isdigit(argv[2],strlen(argv[2]))==FAIL))
+            {
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                return FAIL ;
+            } 
             if (argc != 3)
             {
-                RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                 return FAIL ;
             } 
             if(atoi(argv[1]) > 2)
             {
-                RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                 return FAIL ;
             }
            
@@ -814,21 +1114,176 @@ static uint32_t handle_lora_config(RUI_LORA_STATUS_T *config, int argc, char *ar
                 case RUI_STATUS_OK:
                     switch(atoi(argv[1]))
                     {
-                        case 0:RUI_LOG_PRINTF("LoRa configure send_interval disable mode success\r\nOK\r\n");
+                        case 0:RUI_LOG_PRINTF("OK \r\n");
                             break;
-                        case 1:RUI_LOG_PRINTF("LoRa configure send_interval sleep mode success\r\nOK\r\n");
+                        case 1:RUI_LOG_PRINTF("OK \r\n");
                             break;
-                        case 2:RUI_LOG_PRINTF("LoRa configure send_interval no_sleep mode success\r\nOK\r\n");
+                        case 2:RUI_LOG_PRINTF("OK \r\n");
                             break;
                     }
                     return SUCCESS;
-                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+                case RUI_STATUS_PARAMETER_INVALID:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
                     return FAIL;
-                default: RUI_LOG_PRINTF("ERROR: LORA_STATUS_ERROR %d\r\n",rui_return_status);
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",rui_return_status);
                     return FAIL;
             } 
             break;
-        default :RUI_LOG_PRINTF("ERROR: RUI_AT_UNSUPPORT %d\r\n",RUI_AT_UNSUPPORT);
+        case sys_dev_eui:            
+            if(verify_config_data(argc,argv[1],8,lora_id) != SUCCESS)return FAIL ;        
+            rui_return_status = rui_lora_set_sys_dev_eui(lora_id);
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                    return SUCCESS;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL;
+            } 
+            break;
+        case sys_app_eui:
+            if(verify_config_data(argc,argv[1],8,lora_id) != SUCCESS)return FAIL ; 
+            rui_return_status = rui_lora_set_sys_app_eui(lora_id);
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                    return SUCCESS;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL;
+            } 
+            break;
+        case sys_app_key:
+            if(verify_config_data(argc,argv[1],16,lora_id) != SUCCESS) return FAIL ;  
+            rui_return_status = rui_lora_set_sys_app_key(lora_id);
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                    return SUCCESS;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL;
+            }         
+            break;
+        case sys_dev_addr:            
+            if(verify_config_data(argc,argv[1],4,lora_id) != SUCCESS)return FAIL ;  
+            rui_return_status = rui_lora_set_sys_dev_addr(lora_id); 
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                    return SUCCESS;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL;
+            }    
+            break;
+        case sys_apps_key:
+            if(verify_config_data(argc,argv[1],16,lora_id) != SUCCESS)return FAIL ;
+            rui_return_status = rui_lora_set_sys_apps_key(lora_id);
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                    return SUCCESS;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL;
+            }    
+            break;
+        case sys_nwks_key:
+            if(verify_config_data(argc,argv[1],16,lora_id) != SUCCESS)return FAIL ;
+            rui_return_status = rui_lora_set_sys_nwks_key(lora_id);
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                    return SUCCESS;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL;
+            }             
+            break;
+        case sys_multicast_dev_addr:
+            if(verify_config_data(argc,argv[1],4,lora_id) != SUCCESS)return FAIL ;
+            rui_return_status = rui_lora_set_sys_multicast_dev_addr(lora_id);
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                    return SUCCESS;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL;
+            }
+            break;
+        case sys_multicast_apps_key:
+            if(verify_config_data(argc,argv[1],16,lora_id) != SUCCESS)return FAIL ;
+            rui_return_status = rui_lora_set_sys_multicast_apps_key(lora_id);
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                    return SUCCESS;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL;
+            }
+            break;
+        case sys_multicast_nwks_key:
+            if(verify_config_data(argc,argv[1],16,lora_id) != SUCCESS)return FAIL ;
+            rui_return_status = rui_lora_set_sys_multicast_nwks_key(lora_id);
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                    return SUCCESS;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL;
+            }
+            break; 
+        case default_parameters:
+            // UartPrint("argc:%d\r\n",argc);
+            if(argc>1)
+			{
+				RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+				return FAIL ;
+			}
+            rui_return_status = rui_lora_set_sys_default_parameters();
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                    return SUCCESS;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL;
+            }
+            break; 
+        case dutycycle_enable:
+            if(verify_isdigit(argv[1],strlen(argv[1]))==FAIL)
+			{
+				RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+				return FAIL ;
+			}
+            if(atoi(argv[1])>1)
+            {
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                return FAIL;
+            }
+            rui_return_status = rui_lora_set_dutycycle_enable(atoi(argv[1]));
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                    return SUCCESS;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL;
+            }
+            break; 
+        case send_repeat_cnt:
+            if(verify_isdigit(argv[1],strlen(argv[1]))==FAIL)
+			{
+				RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+				return FAIL ;
+			}
+            if(atoi(argv[1])>8)
+            {
+                RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                return FAIL;
+            }
+            rui_return_status = rui_lora_set_send_repeat_cnt(atoi(argv[1]));
+            switch(rui_return_status)
+            {
+                case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                    return SUCCESS;
+                default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                    return FAIL;
+            }
+            break;          
+        default :RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_UNSUPPORT);
             return FAIL ;
             break;
     }  
@@ -843,62 +1298,103 @@ static uint32_t  handle_lorap2p_config(RUI_LORA_STATUS_T *config, int argc, char
     uint8_t  Codingrate; 
     uint16_t  Preamlen; 
     uint8_t  Powerdbm;
+    if(g_lora_config.work_mode==LORAWAN)
+    {
+        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_LORA_STATUS_SERVICE_UNKNOWN);
+        return FAIL;
+    }
+    if(strcmp(argv[0],"transfer_mode")==0)
+    {
+        // RUI_LOG_PRINTF("argc: %d\r\n",argc);
+        if((argc > 2)||(argc < 1))
+        {
+            RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+            return FAIL ;
+        }
+
+        rui_return_status=rui_lorap2p_set_work_mode(atoi(argv[1]));
+        switch(rui_return_status)
+        {
+            case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+                return SUCCESS;
+            case RUI_LORA_STATUS_SERVICE_UNKNOWN:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_LORA_STATUS_SERVICE_UNKNOWN);
+                return FAIL;
+            default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+                return FAIL;
+        }      
+    }
 
     if(argc > 6)
     {
-        RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
         return FAIL ;
     }
 
-    Frequency = atoi(argv[0]);
+    for(uint8_t i=0; i<6; i++)
+    {
+        if(verify_isdigit(argv[i],strlen(argv[i]))==FAIL)
+        {
+            RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+            return FAIL ;
+        }
+    }    
+    if((atoi(argv[0])>>(sizeof(uint32_t))*8)!=0)
+    {
+        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+        return FAIL;
+    }else  Frequency=atoi(argv[0]);
     // RUI_LOG_PRINTF("Frequency=%d\r\n",Frequency);
 
     if((atoi(argv[1])>12)||(atoi(argv[1])<7))
     {
-        RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
         return FAIL ;
     } else Spreadfact = atoi(argv[1]);
 
     if((atoi(argv[2])>2)||(atoi(argv[2])<0))
     {
-        RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
         return FAIL ;
     } else Bandwidth = atoi(argv[2]);
 
     if((atoi(argv[3])>4)||(atoi(argv[3])<1))
     {
-        RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
         return FAIL ;
     } else Codingrate = atoi(argv[3]);
 
     if((atoi(argv[4])>65535)||(atoi(argv[4])<2))
     {
-        RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
         return FAIL ;
     } else Preamlen = atoi(argv[4]);
 
     if((atoi(argv[5])>20)||(atoi(argv[5])<0))
     {
-        RUI_LOG_PRINTF("ERROR: RUI_AT_PARAMETER_INVALID %d\r\n",RUI_AT_PARAMETER_INVALID);
+        RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
         return FAIL ;
     } else Powerdbm = atoi(argv[5]);
 
-    if(rui_lorap2p_config(Frequency,Spreadfact,Bandwidth,Codingrate,Preamlen,Powerdbm) == RUI_STATUS_OK)
+    rui_return_status=rui_lorap2p_config(Frequency,Spreadfact,Bandwidth,Codingrate,Preamlen,Powerdbm);
+    switch(rui_return_status)
     {
-        RUI_LOG_PRINTF("LoRaP2P configure success\r\nOK\r\n");
-        return SUCCESS;
-    }
-    else 
-    {
-        RUI_LOG_PRINTF("ERROR: RUI_AT_LORA_BUSY %d\r\n",RUI_AT_LORA_BUSY);
-        return FAIL ;
+        case RUI_STATUS_OK:RUI_LOG_PRINTF("OK \r\n");
+            return SUCCESS;
+        case RUI_LORA_STATUS_SERVICE_UNKNOWN:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_LORA_STATUS_SERVICE_UNKNOWN);
+            return FAIL;
+        case RUI_LORA_STATUS_BUSY:RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_LORA_STATUS_BUSY);
+            return FAIL;
+        default: RUI_LOG_PRINTF("ERROR: %d\r\n",RUI_AT_PARAMETER_INVALID);
+            return FAIL;
     }
 }
 
+
+extern bsp_sensor_data_t bsp_sensor;
 extern bool sample_flag ;
 static uint32_t handle_device_status(void)
 {
-    RUI_LOG_PRINTF("OK\r\n*************************************************\r\n===============Device Status List================\r\n"); 
+    RUI_LOG_PRINTF("OK.\r\n*************************************************\r\n===============Device Status List================\r\n"); 
 
     RUI_LOG_PRINTF("Board Core:  RAK811\r\n");
     RUI_LOG_PRINTF("MCU:  STM32L151CB_A\r\n");   
@@ -907,14 +1403,23 @@ static uint32_t handle_device_status(void)
 
     if(sample_flag)  
     {
-        /*If sampled sensor data, print send sensor data here*/
+        RUI_LOG_PRINTF("Battery Voltage:%d.%d V \r\n",(uint32_t)(bsp_sensor.voltage), (uint32_t)((bsp_sensor.voltage)*1000-((int32_t)(bsp_sensor.voltage)) * 1000));
+
+        RUI_LOG_PRINTF("BME680 sensor data:\r\n");
+        RUI_LOG_PRINTF("  Humidity:%d.%d %%RH\r\n",(int32_t)(bsp_sensor.humidity/1000),(int32_t)(bsp_sensor.humidity%1000));		
+        RUI_LOG_PRINTF("  Temperature:%d.%d degree\r\n",(int32_t)(bsp_sensor.temperature/100),(int32_t)(bsp_sensor.temperature%100));	
+        RUI_LOG_PRINTF("  Pressure:%d.%d hPa\r\n",(int32_t)(bsp_sensor.pressure/100),(int32_t)(bsp_sensor.pressure%100));	
+        RUI_LOG_PRINTF("  Gas_resistance: %d Ohms \r\n", bsp_sensor.resis);	
     }else
     {
         /*If not sampled sensor data, print current sensor data here */
+        BoardBatteryMeasureVolage(&bsp_sensor.voltage);
+        bsp_sensor.voltage=bsp_sensor.voltage/1000.0;   //convert mV to V
+        RUI_LOG_PRINTF("Battery Voltage:%d.%d V \r\n",(uint32_t)(bsp_sensor.voltage), (uint32_t)((bsp_sensor.voltage)*1000-((int32_t)(bsp_sensor.voltage)) * 1000));
+        RUI_LOG_PRINTF("\r\n"); 
+        BME680_get_data(&bsp_sensor.humidity,&bsp_sensor.temperature,&bsp_sensor.pressure,&bsp_sensor.resis); 
     }
-       
-
+    
     RUI_LOG_PRINTF("===================List End======================\r\n"); 
     RUI_LOG_PRINTF("*************************************************\r\n");       
-}
-
+}     
