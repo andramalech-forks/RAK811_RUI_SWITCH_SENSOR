@@ -22,12 +22,12 @@ RUI_LORA_STATUS_T app_lora_status; //record status
 const uint8_t level[2]={0,1};
 #define low     &level[0]
 #define high    &level[1]
-RUI_GPIO_ST Led_Blue;  //join LoRaWAN successed indicator light
-RUI_GPIO_ST Led_Green;  //send data successed indicator light 
+RUI_GPIO_ST Led_Red;  //send data successed indicator light
+RUI_GPIO_ST Led_Green; //join LoRaWAN successed indicator light   
 RUI_GPIO_ST Bat_level;
 RUI_I2C_ST I2c_1;
 TimerEvent_t Led_Green_Timer;
-TimerEvent_t Led_Blue_Timer;  //LoRa send out indicator light
+TimerEvent_t Led_Red_Timer;  //LoRa send out indicator light
 volatile static bool autosend_flag = false;    //auto send flag
 static uint8_t a[80]={};    // Data buffer to be sent by lora
 static uint8_t sensor_data_cnt=0;  //send data counter by LoRa 
@@ -57,10 +57,10 @@ void OnLed_Green_TimerEvent(void)
     }
 }
 
-void OnLed_Blue_TimerEvent(void)
+void OnLed_Red_TimerEvent(void)
 {
-    rui_timer_stop(&Led_Blue_Timer);
-    rui_gpio_rw(RUI_IF_WRITE,&Led_Blue, high);
+    rui_timer_stop(&Led_Red_Timer);
+    rui_gpio_rw(RUI_IF_WRITE,&Led_Red, high);
 
     rui_lora_get_status(false,&app_lora_status);  //The query gets the current status
     switch(app_lora_status.autosend_status)
@@ -75,24 +75,28 @@ void OnLed_Blue_TimerEvent(void)
 }
 void bsp_led_init(void)
 {
-    Led_Green.pin_num = LED_1;
-    Led_Blue.pin_num = LED_2;
+   
+    Led_Red.pin_num = LED_1;  
+    Led_Red.dir = RUI_GPIO_PIN_DIR_OUTPUT;
+    Led_Red.pull = RUI_GPIO_PIN_NOPULL;
+
+    Led_Green.pin_num = LED_2;
     Led_Green.dir = RUI_GPIO_PIN_DIR_OUTPUT;
-    Led_Blue.dir = RUI_GPIO_PIN_DIR_OUTPUT;
     Led_Green.pull = RUI_GPIO_PIN_NOPULL;
-    Led_Blue.pull = RUI_GPIO_PIN_NOPULL;
 
     rui_gpio_init(&Led_Green);
-    rui_gpio_init(&Led_Blue);
     rui_gpio_rw(RUI_IF_WRITE,&Led_Green,low);
-    rui_gpio_rw(RUI_IF_WRITE,&Led_Blue,low);
+
+    rui_gpio_init(&Led_Red);
+    rui_gpio_rw(RUI_IF_WRITE,&Led_Red,low);
+
     rui_delay_ms(200);
     rui_gpio_rw(RUI_IF_WRITE,&Led_Green,high);
-    rui_gpio_rw(RUI_IF_WRITE,&Led_Blue,high);
+    rui_gpio_rw(RUI_IF_WRITE,&Led_Red,high);
     rui_timer_init(&Led_Green_Timer,OnLed_Green_TimerEvent);
-    rui_timer_init(&Led_Blue_Timer,OnLed_Blue_TimerEvent);
+    rui_timer_init(&Led_Red_Timer,OnLed_Red_TimerEvent);
     rui_timer_setvalue(&Led_Green_Timer,100);
-    rui_timer_setvalue(&Led_Blue_Timer,100);
+    rui_timer_setvalue(&Led_Red_Timer,100);
 }
 void bsp_adc_init(void)
 {
@@ -119,7 +123,7 @@ void bsp_init(void)
     bsp_led_init();
     bsp_adc_init();
     bsp_i2c_init();
-    BME680_Init();
+    //BME680_Init();
 }
 
 
@@ -246,14 +250,24 @@ void app_loop(void)
             RUI_LOG_PRINTF("Battery Voltage = %d.%d V \r\n",(uint32_t)(bsp_sensor.voltage), (uint32_t)((bsp_sensor.voltage)*1000-((int32_t)(bsp_sensor.voltage)) * 1000));
             temp=(uint16_t)round(bsp_sensor.voltage*100.0);
             lpp_data[lpp_cnt].startcnt = sensor_data_cnt;
-            a[sensor_data_cnt++]=0x08;
-            a[sensor_data_cnt++]=0x02;
-            a[sensor_data_cnt++]=(temp&0xffff) >> 8;
-            a[sensor_data_cnt++]=temp&0xff;	
-            lpp_data[lpp_cnt].size = sensor_data_cnt - lpp_data[lpp_cnt].startcnt;	
+            
+	    //a[sensor_data_cnt++]=0x08;
+            //a[sensor_data_cnt++]=0x02;
+            //a[sensor_data_cnt++]=(temp&0xffff) >> 8;
+            //a[sensor_data_cnt++]=temp&0xff;	
+            
+	    //LPP frame
+	    a[sensor_data_cnt++]=0x00;			// Digital Inputs	(IPSO 3200)
+	    a[sensor_data_cnt++]=0x00;			// 7-4 irqs fiGreen 3-0 read  value
+	    a[sensor_data_cnt++]=0x02;			// Analog Input		(IPSO 3202)
+	    a[sensor_data_cnt++]=(temp&0xffff) >> 8;
+	    a[sensor_data_cnt++]=temp&0xff;	
+
+	    lpp_data[lpp_cnt].size = sensor_data_cnt - lpp_data[lpp_cnt].startcnt;	
             lpp_cnt++;		
 
-            if(BME680_get_data(&bsp_sensor.humidity,&bsp_sensor.temperature,&bsp_sensor.pressure,&bsp_sensor.resis)==0)
+	// switch sensor info here!
+            if(1==0)
             {
                 lpp_data[lpp_cnt].startcnt = sensor_data_cnt;
                 a[sensor_data_cnt++]=0x07;
@@ -439,8 +453,8 @@ void LoRaWANSendsucceed_callback(RUI_MCPS_T mcps_type,RUI_RETURN_STATUS status)
 	}else if(status != RUI_AT_LORA_INFO_STATUS_ADDRESS_FAIL)RUI_LOG_PRINTF("ERROR: %d\r\n",status);   
 	
     rui_delay_ms(10);  
-    rui_gpio_rw(RUI_IF_WRITE,&Led_Blue, low);
-    rui_timer_start(&Led_Blue_Timer); 
+    rui_gpio_rw(RUI_IF_WRITE,&Led_Red, low);
+    rui_timer_start(&Led_Red_Timer); 
 
 }
 
@@ -497,7 +511,7 @@ void bsp_wakeup(void)
     sendfull = true;  //clear subcontract send flag
     sample_status = false;  //clear sample flag
     bsp_i2c_init();
-    BME680_Init();
+    //BME680_Init();
     rui_delay_ms(50);
 }
 
@@ -506,7 +520,7 @@ void bsp_wakeup(void)
  * *****************************************************************************************/ 
 void main(void)
 {
-    rui_uart_mode_config(RUI_UART3,RUI_UART_USER); //Forces UART3 to be configured in RUI_UART_USER mode
+    rui_uart_mode_config(RUI_UART3,RUI_UART_USER); //Forces UART3 to be configuGreen in RUI_UART_USER mode
     rui_init();
     bsp_init();
     

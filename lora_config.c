@@ -1406,10 +1406,11 @@ static uint32_t handle_device_status(void)
         RUI_LOG_PRINTF("Battery Voltage:%d.%d V \r\n",(uint32_t)(bsp_sensor.voltage), (uint32_t)((bsp_sensor.voltage)*1000-((int32_t)(bsp_sensor.voltage)) * 1000));
 
         RUI_LOG_PRINTF("BME680 sensor data:\r\n");
-        RUI_LOG_PRINTF("  Humidity:%d.%d %%RH\r\n",(int32_t)(bsp_sensor.humidity/1000),(int32_t)(bsp_sensor.humidity%1000));		
-        RUI_LOG_PRINTF("  Temperature:%d.%d degree\r\n",(int32_t)(bsp_sensor.temperature/100),(int32_t)(bsp_sensor.temperature%100));	
-        RUI_LOG_PRINTF("  Pressure:%d.%d hPa\r\n",(int32_t)(bsp_sensor.pressure/100),(int32_t)(bsp_sensor.pressure%100));	
-        RUI_LOG_PRINTF("  Gas_resistance: %d Ohms \r\n", bsp_sensor.resis);	
+	// switch data here!
+        //RUI_LOG_PRINTF("  Humidity:%d.%d %%RH\r\n",(int32_t)(bsp_sensor.humidity/1000),(int32_t)(bsp_sensor.humidity%1000));		
+        //RUI_LOG_PRINTF("  Temperature:%d.%d degree\r\n",(int32_t)(bsp_sensor.temperature/100),(int32_t)(bsp_sensor.temperature%100));	
+        //RUI_LOG_PRINTF("  Pressure:%d.%d hPa\r\n",(int32_t)(bsp_sensor.pressure/100),(int32_t)(bsp_sensor.pressure%100));	
+        //RUI_LOG_PRINTF("  Gas_resistance: %d Ohms \r\n", bsp_sensor.resis);	
     }else
     {
         /*If not sampled sensor data, print current sensor data here */
@@ -1417,7 +1418,7 @@ static uint32_t handle_device_status(void)
         bsp_sensor.voltage=bsp_sensor.voltage/1000.0;   //convert mV to V
         RUI_LOG_PRINTF("Battery Voltage:%d.%d V \r\n",(uint32_t)(bsp_sensor.voltage), (uint32_t)((bsp_sensor.voltage)*1000-((int32_t)(bsp_sensor.voltage)) * 1000));
         RUI_LOG_PRINTF("\r\n"); 
-        BME680_get_data(&bsp_sensor.humidity,&bsp_sensor.temperature,&bsp_sensor.pressure,&bsp_sensor.resis); 
+        //BME680_get_data(&bsp_sensor.humidity,&bsp_sensor.temperature,&bsp_sensor.pressure,&bsp_sensor.resis); 
     }
     
     RUI_LOG_PRINTF("===================List End======================\r\n"); 
