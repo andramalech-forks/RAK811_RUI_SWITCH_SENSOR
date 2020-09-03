@@ -13,7 +13,6 @@ RUI_LORA_STATUS_T app_lora_status; //record status
  * 
  * *****************************************************************************************/ 
 #define LED_1                                   8
-#define LED_2                                   9
 #define  I2C_SDA  19
 #define  I2C_SCL  18
 #define BAT_LEVEL_CHANNEL                       20
@@ -22,12 +21,11 @@ RUI_LORA_STATUS_T app_lora_status; //record status
 const uint8_t level[2]={0,1};
 #define low     &level[0]
 #define high    &level[1]
-RUI_GPIO_ST Led_Red;  //send data successed indicator light
-RUI_GPIO_ST Led_Green; //join LoRaWAN successed indicator light   
+RUI_GPIO_ST Led_Red;  //send data successed and join indicator light
 RUI_GPIO_ST Bat_level;
 RUI_I2C_ST I2c_1;
-TimerEvent_t Led_Green_Timer;
-TimerEvent_t Led_Red_Timer;  //LoRa send out indicator light
+TimerEvent_t Join_Ok_Timer;
+TimerEvent_t LoRa_send_ok_Timer;  //LoRa send out indicator light
 volatile static bool autosend_flag = false;    //auto send flag
 static uint8_t a[80]={};    // Data buffer to be sent by lora
 static uint8_t sensor_data_cnt=0;  //send data counter by LoRa 
@@ -45,10 +43,10 @@ void rui_lora_autosend_callback(void)  //auto_send timeout event callback
     IsJoiningflag = false;      
 }
 
-void OnLed_Green_TimerEvent(void)
+void OnJoin_Ok_TimerEvent(void)
 {  
-    rui_timer_stop(&Led_Green_Timer);
-    rui_gpio_rw(RUI_IF_WRITE,&Led_Green, high);
+    rui_timer_stop(&Join_Ok_Timer);
+    rui_gpio_rw(RUI_IF_WRITE,&Led_Red, low);
 
     rui_lora_get_status(false,&app_lora_status);;//The query gets the current device status 
     if(app_lora_status.autosend_status)
@@ -57,10 +55,10 @@ void OnLed_Green_TimerEvent(void)
     }
 }
 
-void OnLed_Red_TimerEvent(void)
+void OnLoRa_send_ok_TimerEvent(void)
 {
-    rui_timer_stop(&Led_Red_Timer);
-    rui_gpio_rw(RUI_IF_WRITE,&Led_Red, high);
+    rui_timer_stop(&LoRa_send_ok_Timer);
+    rui_gpio_rw(RUI_IF_WRITE,&Led_Red, low);
 
     rui_lora_get_status(false,&app_lora_status);  //The query gets the current status
     switch(app_lora_status.autosend_status)
@@ -80,23 +78,16 @@ void bsp_led_init(void)
     Led_Red.dir = RUI_GPIO_PIN_DIR_OUTPUT;
     Led_Red.pull = RUI_GPIO_PIN_NOPULL;
 
-    Led_Green.pin_num = LED_2;
-    Led_Green.dir = RUI_GPIO_PIN_DIR_OUTPUT;
-    Led_Green.pull = RUI_GPIO_PIN_NOPULL;
-
-    rui_gpio_init(&Led_Green);
-    rui_gpio_rw(RUI_IF_WRITE,&Led_Green,low);
-
     rui_gpio_init(&Led_Red);
+
+    rui_gpio_rw(RUI_IF_WRITE,&Led_Red,high);
+    rui_delay_ms(200);
     rui_gpio_rw(RUI_IF_WRITE,&Led_Red,low);
 
-    rui_delay_ms(200);
-    rui_gpio_rw(RUI_IF_WRITE,&Led_Green,high);
-    rui_gpio_rw(RUI_IF_WRITE,&Led_Red,high);
-    rui_timer_init(&Led_Green_Timer,OnLed_Green_TimerEvent);
-    rui_timer_init(&Led_Red_Timer,OnLed_Red_TimerEvent);
-    rui_timer_setvalue(&Led_Green_Timer,100);
-    rui_timer_setvalue(&Led_Red_Timer,100);
+    rui_timer_init(&Join_Ok_Timer,OnJoin_Ok_TimerEvent);
+    rui_timer_init(&LoRa_send_ok_Timer,OnLoRa_send_ok_TimerEvent);
+    rui_timer_setvalue(&Join_Ok_Timer,2000);
+    rui_timer_setvalue(&LoRa_send_ok_Timer,100);
 }
 void bsp_adc_init(void)
 {
@@ -396,8 +387,8 @@ void LoRaWANJoined_callback(uint32_t status)
         JoinCnt = 0;
         IsJoiningflag = false;
         RUI_LOG_PRINTF("OK Join Success\r\n");
-        rui_gpio_rw(RUI_IF_WRITE,&Led_Green, low);
-        rui_timer_start(&Led_Green_Timer);        
+        rui_gpio_rw(RUI_IF_WRITE,&Led_Red, high);
+        rui_timer_start(&Join_Ok_Timer);        
     }else 
     {        
         if(JoinCnt<JOIN_MAX_CNT) // Join was not successful. Try to join again
@@ -453,8 +444,8 @@ void LoRaWANSendsucceed_callback(RUI_MCPS_T mcps_type,RUI_RETURN_STATUS status)
 	}else if(status != RUI_AT_LORA_INFO_STATUS_ADDRESS_FAIL)RUI_LOG_PRINTF("ERROR: %d\r\n",status);   
 	
     rui_delay_ms(10);  
-    rui_gpio_rw(RUI_IF_WRITE,&Led_Red, low);
-    rui_timer_start(&Led_Red_Timer); 
+    rui_gpio_rw(RUI_IF_WRITE,&Led_Red, high);
+    rui_timer_start(&LoRa_send_ok_Timer); 
 
 }
 
