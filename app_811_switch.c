@@ -12,6 +12,8 @@ RUI_LORA_STATUS_T app_lora_status; //record status
  * The BSP user functions.
  * 
  * *****************************************************************************************/ 
+#define SWITCH_1				3
+#define SWITCH_2				4
 #define LED_1                                   8
 #define  I2C_SDA  19
 #define  I2C_SCL  18
@@ -19,10 +21,13 @@ RUI_LORA_STATUS_T app_lora_status; //record status
 
 
 const uint8_t level[2]={0,1};
+static uint8_t extdigints=0x00;
 #define low     &level[0]
 #define high    &level[1]
 RUI_GPIO_ST Led_Red;  //send data successed and join indicator light
 RUI_GPIO_ST Bat_level;
+RUI_GPIO_ST Switch_One;	// ext interupt switch #1
+RUI_GPIO_ST Switch_Two;	// ext interupt switch #2
 RUI_I2C_ST I2c_1;
 TimerEvent_t Join_Ok_Timer;
 TimerEvent_t LoRa_send_ok_Timer;  //LoRa send out indicator light
@@ -42,6 +47,28 @@ void rui_lora_autosend_callback(void)  //auto_send timeout event callback
     autosend_flag = true;
     IsJoiningflag = false;      
 }
+
+void handle_int_sw1(void)
+{
+	if(extdigints == 0x00 )
+	{
+		extdigints = extdigints | 0x01;
+		autosend_flag = true;
+		IsJoiningflag = false; 
+		RUI_LOG_PRINTF("sw1 int fired! \r\n");
+	}
+}
+void handle_int_sw2(void)
+{
+	if(extdigints == 0x00 )
+	{
+		extdigints = extdigints | 0x02;
+		autosend_flag = true;
+		IsJoiningflag = false; 
+		RUI_LOG_PRINTF("sw2 int fired! \r\n");
+	}
+}
+
 
 void OnJoin_Ok_TimerEvent(void)
 {  
@@ -89,6 +116,19 @@ void bsp_led_init(void)
     rui_timer_setvalue(&Join_Ok_Timer,2000);
     rui_timer_setvalue(&LoRa_send_ok_Timer,100);
 }
+void bsp_di_init(void)
+{
+    Switch_One.pin_num = SWITCH_1;
+    Switch_One.dir = RUI_GPIO_PIN_DIR_INPUT;
+    Switch_One.pull = RUI_GPIO_PIN_NOPULL;
+    rui_gpio_interrupt(true,Switch_One,RUI_GPIO_EDGE_FALL_RAISE,RUI_GPIO_IRQ_LOW_PRIORITY,handle_int_sw1);
+
+    Switch_Two.pin_num = SWITCH_2;
+    Switch_Two.dir = RUI_GPIO_PIN_DIR_INPUT;
+    Switch_Two.pull = RUI_GPIO_PIN_NOPULL;
+    rui_gpio_interrupt(true,Switch_Two,RUI_GPIO_EDGE_FALL_RAISE,RUI_GPIO_IRQ_LOW_PRIORITY,handle_int_sw2);
+
+}
 void bsp_adc_init(void)
 {
     Bat_level.pin_num = BAT_LEVEL_CHANNEL;
@@ -112,6 +152,7 @@ void bsp_i2c_init(void)
 void bsp_init(void)
 {
     bsp_led_init();
+    bsp_di_init();
     bsp_adc_init();
     bsp_i2c_init();
     //BME680_Init();
@@ -227,7 +268,9 @@ extern bsp_sensor_data_t bsp_sensor;
 void app_loop(void)
 {
     int temp=0;         
-    int x,y,z;       
+    int x,y,z;
+    uint8_t digvalue;
+    uint8_t digbit;       
     rui_lora_get_status(false,&app_lora_status);
     if(app_lora_status.IsJoined)  //if LoRaWAN is joined
     {
@@ -241,15 +284,25 @@ void app_loop(void)
             RUI_LOG_PRINTF("Battery Voltage = %d.%d V \r\n",(uint32_t)(bsp_sensor.voltage), (uint32_t)((bsp_sensor.voltage)*1000-((int32_t)(bsp_sensor.voltage)) * 1000));
             temp=(uint16_t)round(bsp_sensor.voltage*100.0);
             lpp_data[lpp_cnt].startcnt = sensor_data_cnt;
-            
+    
 	    //a[sensor_data_cnt++]=0x08;
             //a[sensor_data_cnt++]=0x02;
             //a[sensor_data_cnt++]=(temp&0xffff) >> 8;
             //a[sensor_data_cnt++]=temp&0xff;	
-            
+
+    	    digvalue=0x00;        
+	    
+	    rui_gpio_rw( RUI_IF_READ, &Switch_One, &digbit );
+            if( digbit == 0 )
+            {digvalue = digvalue | 0x01; }
+            rui_gpio_rw( RUI_IF_READ, &Switch_Two, &digbit );
+            if( digbit == 0 )
+            {digvalue = digvalue | 0x02; }
+	    digvalue = digvalue | extdigints<<4;
+
 	    //LPP frame
 	    a[sensor_data_cnt++]=0x00;			// Digital Inputs	(IPSO 3200)
-	    a[sensor_data_cnt++]=0x00;			// 7-4 irqs fiGreen 3-0 read  value
+	    a[sensor_data_cnt++]=digvalue;		// 7-4 irqs fired, 3-0 read  value
 	    a[sensor_data_cnt++]=0x02;			// Analog Input		(IPSO 3202)
 	    a[sensor_data_cnt++]=(temp&0xffff) >> 8;
 	    a[sensor_data_cnt++]=temp&0xff;	
@@ -493,6 +546,8 @@ void bsp_sleep(void)
     /*****************************************************************************
              * user process code before enter sleep
     ******************************************************************************/
+   extdigints=0x00;
+
 } 
 void bsp_wakeup(void)
 {
