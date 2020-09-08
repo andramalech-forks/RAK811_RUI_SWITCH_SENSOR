@@ -4,7 +4,11 @@
 
 static RUI_RETURN_STATUS rui_return_status;
 //join cnt
-#define JOIN_MAX_CNT 6
+#define JOIN_MAX_CNT 			6
+#define LPP_PACKED_PAYLOAD_PORT 	2
+#define LPP_DEVICE_PERIOD_CONF_PORT 	11
+#define LPP_CONFIG_MASK_TXPERIOD 	0x02
+#define LPP_TXPERIOD_SIZE 		4
 static uint8_t JoinCnt=0;
 RUI_LORA_STATUS_T app_lora_status; //record status 
 
@@ -12,12 +16,15 @@ RUI_LORA_STATUS_T app_lora_status; //record status
  * The BSP user functions.
  * 
  * *****************************************************************************************/ 
-#define SWITCH_1				3
-#define SWITCH_2				4
-#define LED_1                                   8
-#define  I2C_SDA  19
-#define  I2C_SCL  18
-#define BAT_LEVEL_CHANNEL                       20
+#define SWITCH_1		3
+#define SWITCH_2		4
+#define SWITCH_3		14
+#define SWITCH_4		16
+
+#define LED_1			8
+#define I2C_SDA  		19
+#define I2C_SCL  		18
+#define BAT_LEVEL_CHANNEL	20
 
 
 const uint8_t level[2]={0,1};
@@ -26,8 +33,10 @@ static uint8_t extdigints=0x00;
 #define high    &level[1]
 RUI_GPIO_ST Led_Red;  //send data successed and join indicator light
 RUI_GPIO_ST Bat_level;
-RUI_GPIO_ST Switch_One;	// ext interupt switch #1
-RUI_GPIO_ST Switch_Two;	// ext interupt switch #2
+RUI_GPIO_ST Switch_One;		// ext interupt switch #1
+RUI_GPIO_ST Switch_Two;		// ext interupt switch #2
+RUI_GPIO_ST Switch_Three;	// ext interupt switch #3
+RUI_GPIO_ST Switch_Four;	// ext interupt switch #4
 RUI_I2C_ST I2c_1;
 TimerEvent_t Join_Ok_Timer;
 TimerEvent_t LoRa_send_ok_Timer;  //LoRa send out indicator light
@@ -122,11 +131,23 @@ void bsp_di_init(void)
     Switch_One.dir = RUI_GPIO_PIN_DIR_INPUT;
     Switch_One.pull = RUI_GPIO_PIN_NOPULL;
     rui_gpio_interrupt(true,Switch_One,RUI_GPIO_EDGE_FALL_RAISE,RUI_GPIO_IRQ_LOW_PRIORITY,handle_int_sw1);
+    rui_gpio_init(&Switch_One);
 
     Switch_Two.pin_num = SWITCH_2;
     Switch_Two.dir = RUI_GPIO_PIN_DIR_INPUT;
     Switch_Two.pull = RUI_GPIO_PIN_NOPULL;
     rui_gpio_interrupt(true,Switch_Two,RUI_GPIO_EDGE_FALL_RAISE,RUI_GPIO_IRQ_LOW_PRIORITY,handle_int_sw2);
+    rui_gpio_init(&Switch_Two);
+
+    Switch_Three.pin_num = SWITCH_3;
+    Switch_Three.dir = RUI_GPIO_PIN_DIR_INPUT;
+    Switch_Three.pull = RUI_GPIO_PIN_NOPULL;
+    rui_gpio_init(&Switch_Three);
+
+    Switch_Four.pin_num = SWITCH_4;
+    Switch_Four.dir = RUI_GPIO_PIN_DIR_INPUT;
+    Switch_Four.pull = RUI_GPIO_PIN_NOPULL;
+    rui_gpio_init(&Switch_Four);
 
 }
 void bsp_adc_init(void)
@@ -239,7 +260,8 @@ void user_lora_send(void)
             }
         }else
         {
-            rui_return_status = rui_lora_send(8,a,sensor_data_cnt);
+            // small payloads!
+	    rui_return_status = rui_lora_send(LPP_PACKED_PAYLOAD_PORT,a,sensor_data_cnt);
             switch(rui_return_status)
             {
                 case RUI_STATUS_OK:RUI_LOG_PRINTF("[LoRa]: send out\r\n");
@@ -409,6 +431,8 @@ void app_loop(void)
 void LoRaReceive_callback(RUI_RECEIVE_T* Receive_datapackage)
 {
     char hex_str[3] = {0}; 
+    uint32_t txperiod;
+    uint16_t rui_txperiod;
     RUI_LOG_PRINTF("at+recv=%d,%d,%d,%d", Receive_datapackage->Port, Receive_datapackage->Rssi, Receive_datapackage->Snr, Receive_datapackage->BufferSize);   
     
     if ((Receive_datapackage->Buffer != NULL) && Receive_datapackage->BufferSize) {
@@ -418,6 +442,42 @@ void LoRaReceive_callback(RUI_RECEIVE_T* Receive_datapackage)
             sprintf(hex_str, "%02x", Receive_datapackage->Buffer[i]);
             RUI_LOG_PRINTF("%s", hex_str); 
         }
+	// *********************************
+	// LPP Device Period Configuration
+	// *********************************
+	if(Receive_datapackage->Port == LPP_DEVICE_PERIOD_CONF_PORT && Receive_datapackage->Buffer[0] == LPP_CONFIG_MASK_TXPERIOD && Receive_datapackage->BufferSize == LPP_TXPERIOD_SIZE + 1)
+	{
+		RUI_LOG_PRINTF("\r\n");
+		txperiod = Receive_datapackage->Buffer[1] << 24 | Receive_datapackage->Buffer[2] << 16 | Receive_datapackage->Buffer[3] << 8 | Receive_datapackage->Buffer[4];
+
+		if( txperiod < 0x00010000)
+		{
+			rui_txperiod = txperiod;
+
+			rui_lora_get_status(false,&app_lora_status);  //The query gets the current status
+    			switch(app_lora_status.autosend_status)
+    			{
+        			case RUI_AUTO_ENABLE_SLEEP:
+				rui_return_status=rui_lora_set_send_interval(RUI_AUTO_ENABLE_SLEEP,rui_txperiod);  //start autosend_timer after send success
+            			//rui_delay_ms(5);  
+            			break;
+        			case RUI_AUTO_ENABLE_NORMAL:
+				rui_return_status=rui_lora_set_send_interval(RUI_AUTO_ENABLE_NORMAL,rui_txperiod);  //start autosend_timer after send success
+            			break;
+        			default:break;
+    }
+			//rui_return_status=rui_lora_set_send_interval(,rui_txperiod);
+			switch(rui_return_status)
+                	{
+				case RUI_STATUS_OK:RUI_LOG_PRINTF("TX period configuration to %d seconds.",txperiod);break;
+        			default: RUI_LOG_PRINTF("[LoRa]: autosend config error %d\r\n",rui_return_status);break;
+			}
+		}
+		else
+		{
+			RUI_LOG_PRINTF("Error: TX period exceded 65535." );
+		}												
+	}
     }
     RUI_LOG_PRINTF("\r\n");
 }
