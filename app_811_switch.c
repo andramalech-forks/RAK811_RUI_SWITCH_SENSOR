@@ -7,8 +7,10 @@ static RUI_RETURN_STATUS rui_return_status;
 #define JOIN_MAX_CNT 			6
 #define LPP_PACKED_PAYLOAD_PORT 	2
 #define LPP_DEVICE_PERIOD_CONF_PORT 	11
+#define LPP_SENSOR_ENABLE_PORT 		14
 #define LPP_CONFIG_MASK_TXPERIOD 	0x02
 #define LPP_TXPERIOD_SIZE 		4
+#define LPP_SENSOR_ENABLE_SIZE 		1
 static uint8_t JoinCnt=0;
 RUI_LORA_STATUS_T app_lora_status; //record status 
 
@@ -16,6 +18,7 @@ RUI_LORA_STATUS_T app_lora_status; //record status
  * The BSP user functions.
  * 
  * *****************************************************************************************/ 
+
 #define SWITCH_1		3
 #define SWITCH_2		4
 #define SWITCH_3		14
@@ -26,9 +29,16 @@ RUI_LORA_STATUS_T app_lora_status; //record status
 #define I2C_SCL  		18
 #define BAT_LEVEL_CHANNEL	20
 
+#define LED_1_LPP_EN_MASK	0x80
+#define SWITCH_1_LPP_EN_MASK	0x01
+#define SWITCH_2_LPP_EN_MASK	0x02
+#define SWITCH_3_LPP_EN_MASK	0x04
+#define SWITCH_4_LPP_EN_MASK	0x08
 
 const uint8_t level[2]={0,1};
 static uint8_t extdigints=0x00;
+static uint8_t lpp_enable_sensor_mask=0xFF;
+
 #define low     &level[0]
 #define high    &level[1]
 RUI_GPIO_ST Led_Red;  //send data successed and join indicator light
@@ -59,9 +69,9 @@ void rui_lora_autosend_callback(void)  //auto_send timeout event callback
 
 void handle_int_sw1(void)
 {
-	if(extdigints == 0x00 )
+	if(extdigints == 0x00 && lpp_enable_sensor_mask & SWITCH_1_LPP_EN_MASK)
 	{
-		extdigints = extdigints | 0x01;
+		extdigints = extdigints | SWITCH_1_LPP_EN_MASK;
 		autosend_flag = true;
 		IsJoiningflag = false; 
 		RUI_LOG_PRINTF("sw1 int fired! \r\n");
@@ -69,9 +79,9 @@ void handle_int_sw1(void)
 }
 void handle_int_sw2(void)
 {
-	if(extdigints == 0x00 )
+	if(extdigints == 0x00 && lpp_enable_sensor_mask & SWITCH_2_LPP_EN_MASK)
 	{
-		extdigints = extdigints | 0x02;
+		extdigints = extdigints | SWITCH_2_LPP_EN_MASK;
 		autosend_flag = true;
 		IsJoiningflag = false; 
 		RUI_LOG_PRINTF("sw2 int fired! \r\n");
@@ -316,10 +326,10 @@ void app_loop(void)
 	    
 	    rui_gpio_rw( RUI_IF_READ, &Switch_One, &digbit );
             if( digbit == 0 )
-            {digvalue = digvalue | 0x01; }
+            {digvalue = digvalue | SWITCH_1_LPP_EN_MASK; }
             rui_gpio_rw( RUI_IF_READ, &Switch_Two, &digbit );
             if( digbit == 0 )
-            {digvalue = digvalue | 0x02; }
+            {digvalue = digvalue | SWITCH_2_LPP_EN_MASK; }
 	    digvalue = digvalue | extdigints<<4;
 
 	    //LPP frame
@@ -433,6 +443,7 @@ void LoRaReceive_callback(RUI_RECEIVE_T* Receive_datapackage)
     char hex_str[3] = {0}; 
     uint32_t txperiod;
     uint16_t rui_txperiod;
+    uint8_t sens_ch_mask;
     RUI_LOG_PRINTF("at+recv=%d,%d,%d,%d", Receive_datapackage->Port, Receive_datapackage->Rssi, Receive_datapackage->Snr, Receive_datapackage->BufferSize);   
     
     if ((Receive_datapackage->Buffer != NULL) && Receive_datapackage->BufferSize) {
@@ -478,6 +489,24 @@ void LoRaReceive_callback(RUI_RECEIVE_T* Receive_datapackage)
 			RUI_LOG_PRINTF("Error: TX period exceded 65535." );
 		}												
 	}
+	// *********************************
+	// LPP Enable/disable sensors 
+	// *********************************
+	if(Receive_datapackage->Port == LPP_SENSOR_ENABLE_PORT && Receive_datapackage->BufferSize == LPP_SENSOR_ENABLE_SIZE)
+	{
+		RUI_LOG_PRINTF("\r\n");		
+		sens_ch_mask = Receive_datapackage->Buffer[0];
+		RUI_LOG_PRINTF("Received channel mask:" );
+		for (int i = 0; i < 8; i++) 
+		{
+			if( (sens_ch_mask >> (7-i)) & 0x01 )
+				{RUI_LOG_PRINTF("1"); }
+			else
+				{RUI_LOG_PRINTF("0");}            		
+        	}
+		lpp_enable_sensor_mask = sens_ch_mask;
+	}
+
     }
     RUI_LOG_PRINTF("\r\n");
 }
@@ -553,12 +582,17 @@ void LoRaWANSendsucceed_callback(RUI_MCPS_T mcps_type,RUI_RETURN_STATUS status)
             }
             default:             
                 break;
-        } 
-	}else if(status != RUI_AT_LORA_INFO_STATUS_ADDRESS_FAIL)RUI_LOG_PRINTF("ERROR: %d\r\n",status);   
+        }
+    
+	if(lpp_enable_sensor_mask & LED_1_LPP_EN_MASK)
+	{
+		rui_gpio_rw(RUI_IF_WRITE,&Led_Red, high);	    	  
+	}    	
+	rui_timer_start(&LoRa_send_ok_Timer);
+
+    }else if(status != RUI_AT_LORA_INFO_STATUS_ADDRESS_FAIL)RUI_LOG_PRINTF("ERROR: %d\r\n",status);   
 	
-    rui_delay_ms(10);  
-    rui_gpio_rw(RUI_IF_WRITE,&Led_Red, high);
-    rui_timer_start(&LoRa_send_ok_Timer); 
+    
 
 }
 
