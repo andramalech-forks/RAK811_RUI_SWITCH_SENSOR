@@ -38,6 +38,7 @@ RUI_LORA_STATUS_T app_lora_status; //record status
 const uint8_t level[2]={0,1};
 static uint8_t extdigints=0x00;
 static uint8_t lpp_enable_sensor_mask=0xFF;
+static uint8_t lpp_sensor_mask_after_enabled=0x00;
 
 #define low     &level[0]
 #define high    &level[1]
@@ -78,14 +79,22 @@ void handle_int_sw1(void)
 	}
 }
 void handle_int_sw2(void)
-{
-	if(extdigints == 0x00 && lpp_enable_sensor_mask & SWITCH_2_LPP_EN_MASK)
+{		
+	if(extdigints == 0x00 && lpp_enable_sensor_mask & SWITCH_2_LPP_EN_MASK )
 	{
-		extdigints = extdigints | SWITCH_2_LPP_EN_MASK;
-		autosend_flag = true;
-		IsJoiningflag = false; 
-		RUI_LOG_PRINTF("sw2 int fired! \r\n");
-	}
+		if(lpp_sensor_mask_after_enabled & SWITCH_2_LPP_EN_MASK )
+		{
+			// avoid firing after re-enable 
+			lpp_sensor_mask_after_enabled = lpp_sensor_mask_after_enabled & ~SWITCH_2_LPP_EN_MASK;
+		}
+		else
+		{
+			extdigints = extdigints | SWITCH_2_LPP_EN_MASK;
+			autosend_flag = true;
+			IsJoiningflag = false; 
+			RUI_LOG_PRINTF("sw2 int fired! \r\n");
+		}
+	}		
 }
 
 
@@ -293,7 +302,8 @@ void user_lora_send(void)
                     break;
             }               
         }
-    }                    
+    }
+                        
 }
 
 extern bsp_sensor_data_t bsp_sensor;
@@ -505,6 +515,25 @@ void LoRaReceive_callback(RUI_RECEIVE_T* Receive_datapackage)
 				{RUI_LOG_PRINTF("0");}            		
         	}
 		lpp_enable_sensor_mask = sens_ch_mask;
+
+		if(lpp_enable_sensor_mask & SWITCH_2_LPP_EN_MASK)
+		{			
+			Switch_Two.pin_num = SWITCH_2;
+    			Switch_Two.dir = RUI_GPIO_PIN_DIR_INPUT;
+    			Switch_Two.pull = RUI_GPIO_PIN_NOPULL;
+			lpp_sensor_mask_after_enabled = lpp_sensor_mask_after_enabled | SWITCH_2_LPP_EN_MASK;    			
+    			rui_gpio_init(&Switch_Two);
+			RUI_LOG_PRINTF("\r\nsw2 int enabled \r\n");
+		}
+		else
+		{
+			Switch_Two.pin_num = SWITCH_2;
+    			Switch_Two.dir = RUI_GPIO_PIN_DIR_OUTPUT;
+    			Switch_Two.pull = RUI_GPIO_PIN_NOPULL;
+    			rui_gpio_init(&Switch_Two);
+			rui_gpio_rw(RUI_IF_WRITE,&Switch_Two,low);
+			RUI_LOG_PRINTF("\r\nsw2 int disabled \r\n");
+		}
 	}
 
     }
