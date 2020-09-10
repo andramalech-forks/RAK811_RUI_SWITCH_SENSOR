@@ -39,6 +39,9 @@ const uint8_t level[2]={0,1};
 static uint8_t extdigints=0x00;
 static uint8_t lpp_enable_sensor_mask=0xFF;
 static uint8_t lpp_sensor_mask_after_enabled=0x00;
+static uint8_t lpp_port=0x00;
+bool lpp_txperiod_pending_tx=false;
+bool lpp_sensormask_pending_tx=false;
 
 #define low     &level[0]
 #define high    &level[1]
@@ -72,10 +75,18 @@ void handle_int_sw1(void)
 {
 	if(extdigints == 0x00 && lpp_enable_sensor_mask & SWITCH_1_LPP_EN_MASK)
 	{
-		extdigints = extdigints | SWITCH_1_LPP_EN_MASK;
-		autosend_flag = true;
-		IsJoiningflag = false; 
-		RUI_LOG_PRINTF("sw1 int fired! \r\n");
+		if(lpp_sensor_mask_after_enabled & SWITCH_1_LPP_EN_MASK )
+		{
+			// avoid firing after re-enable 
+			lpp_sensor_mask_after_enabled = lpp_sensor_mask_after_enabled & ~SWITCH_1_LPP_EN_MASK;
+		}
+		else
+		{
+			extdigints = extdigints | SWITCH_1_LPP_EN_MASK;
+			autosend_flag = true;
+			IsJoiningflag = false; 
+			RUI_LOG_PRINTF("sw1 int fired! \r\n");
+		}
 	}
 }
 void handle_int_sw2(void)
@@ -280,7 +291,7 @@ void user_lora_send(void)
         }else
         {
             // small payloads!
-	    rui_return_status = rui_lora_send(LPP_PACKED_PAYLOAD_PORT,a,sensor_data_cnt);
+	    rui_return_status = rui_lora_send(lpp_port,a,sensor_data_cnt);
             switch(rui_return_status)
             {
                 case RUI_STATUS_OK:RUI_LOG_PRINTF("[LoRa]: send out\r\n");
@@ -341,13 +352,40 @@ void app_loop(void)
             if( digbit == 0 )
             {digvalue = digvalue | SWITCH_2_LPP_EN_MASK; }
 	    digvalue = digvalue | extdigints<<4;
-
+		
 	    //LPP frame
-	    a[sensor_data_cnt++]=0x00;			// Digital Inputs	(IPSO 3200)
-	    a[sensor_data_cnt++]=digvalue;		// 7-4 irqs fired, 3-0 read  value
-	    a[sensor_data_cnt++]=0x02;			// Analog Input		(IPSO 3202)
-	    a[sensor_data_cnt++]=(temp&0xffff) >> 8;
-	    a[sensor_data_cnt++]=temp&0xff;	
+
+	    if( lpp_txperiod_pending_tx | lpp_sensormask_pending_tx )
+	    {
+		if(lpp_txperiod_pending_tx)
+		{
+			lpp_txperiod_pending_tx = false;
+			a[sensor_data_cnt++] = LPP_CONFIG_MASK_TXPERIOD;
+			a[sensor_data_cnt++] = 0x00;
+ 			a[sensor_data_cnt++] = 0x00;
+			a[sensor_data_cnt++] = (app_lora_status.lorasend_interval) >> 8;
+			a[sensor_data_cnt++] = (app_lora_status.lorasend_interval) & 0xff;
+			lpp_port = LPP_DEVICE_PERIOD_CONF_PORT;
+		}
+		else
+		{
+			lpp_sensormask_pending_tx = false;
+			a[sensor_data_cnt++] = lpp_enable_sensor_mask;			
+			lpp_port = LPP_SENSOR_ENABLE_PORT;
+		}
+	    }
+	    else
+	    {
+		a[sensor_data_cnt++]=0x00;			// Digital Inputs	(IPSO 3200)
+	    	a[sensor_data_cnt++]=digvalue;			// 7-4 irqs fired, 3-0 read  value
+	    	a[sensor_data_cnt++]=0x02;			// Analog Input		(IPSO 3202)
+	    	a[sensor_data_cnt++]=(temp&0xffff) >> 8;
+	    	a[sensor_data_cnt++]=temp&0xff;	
+		lpp_port = LPP_PACKED_PAYLOAD_PORT;
+	    }
+	    
+
+	    
 
 	    lpp_data[lpp_cnt].size = sensor_data_cnt - lpp_data[lpp_cnt].startcnt;	
             lpp_cnt++;		
@@ -486,18 +524,19 @@ void LoRaReceive_callback(RUI_RECEIVE_T* Receive_datapackage)
 				rui_return_status=rui_lora_set_send_interval(RUI_AUTO_ENABLE_NORMAL,rui_txperiod);  //start autosend_timer after send success
             			break;
         			default:break;
-    }
+    			}
 			//rui_return_status=rui_lora_set_send_interval(,rui_txperiod);
 			switch(rui_return_status)
                 	{
 				case RUI_STATUS_OK:RUI_LOG_PRINTF("TX period configuration to %d seconds.",txperiod);break;
         			default: RUI_LOG_PRINTF("[LoRa]: autosend config error %d\r\n",rui_return_status);break;
-			}
+			}			
 		}
 		else
 		{
 			RUI_LOG_PRINTF("Error: TX period exceded 65535." );
 		}												
+		lpp_txperiod_pending_tx = true;
 	}
 	// *********************************
 	// LPP Enable/disable sensors 
@@ -515,6 +554,25 @@ void LoRaReceive_callback(RUI_RECEIVE_T* Receive_datapackage)
 				{RUI_LOG_PRINTF("0");}            		
         	}
 		lpp_enable_sensor_mask = sens_ch_mask;
+
+		if(lpp_enable_sensor_mask & SWITCH_1_LPP_EN_MASK)
+		{			
+			Switch_One.pin_num = SWITCH_1;
+    			Switch_One.dir = RUI_GPIO_PIN_DIR_INPUT;
+    			Switch_One.pull = RUI_GPIO_PIN_NOPULL;
+			lpp_sensor_mask_after_enabled = lpp_sensor_mask_after_enabled | SWITCH_1_LPP_EN_MASK;    			
+    			rui_gpio_init(&Switch_One);
+			RUI_LOG_PRINTF("\r\nsw1 int enabled \r\n");
+		}
+		else
+		{
+			Switch_One.pin_num = SWITCH_1;
+    			Switch_One.dir = RUI_GPIO_PIN_DIR_OUTPUT;
+    			Switch_One.pull = RUI_GPIO_PIN_NOPULL;
+    			rui_gpio_init(&Switch_One);
+			rui_gpio_rw(RUI_IF_WRITE,&Switch_One,low);
+			RUI_LOG_PRINTF("\r\nsw1 int disabled \r\n");
+		}
 
 		if(lpp_enable_sensor_mask & SWITCH_2_LPP_EN_MASK)
 		{			
@@ -534,6 +592,7 @@ void LoRaReceive_callback(RUI_RECEIVE_T* Receive_datapackage)
 			rui_gpio_rw(RUI_IF_WRITE,&Switch_Two,low);
 			RUI_LOG_PRINTF("\r\nsw2 int disabled \r\n");
 		}
+		lpp_sensormask_pending_tx = true;
 	}
 
     }
