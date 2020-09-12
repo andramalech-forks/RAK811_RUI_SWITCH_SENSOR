@@ -8,7 +8,7 @@ Features
 ---------
 
 * up to 4 digital i/o 
-* led indicator for Join Ok and tx ok
+* led indicator for Join Ok and Tx ok
 * periodic transmission time configurable via downlink
 * enable/disable sensors and led via downlink
 * sleep between transmissions
@@ -22,9 +22,9 @@ Hardware setup
 
 Behavior
 --------
-Every time a sensor changes its state open-to-close or close-to-open the module leaves sleep transmit a packet, and goes to sleep again.
-The minimun transmission time between sucessive sensor status change is 5 seconds.
-The module also transmit sensor status in a periodic way
+Every time a sensor changes its state open-to-close or close-to-open the module leaves sleep, transmit a packet, and goes to sleep again.
+The minimum transmission time between successive sensor status change is 5 seconds.
+The module also transmits sensor status in a periodic way
 
 Data frames
 ------------
@@ -67,16 +67,16 @@ I/O pins enable/disable mask bit 7: Led output
 bit value 0 = input/output disabled
 bit value 1 = input/output enabled
 
-Disable inputs is only recomendable when a sensor have a mechanical failure, giving false readings, and isn't possible to phisically unplug it.
+Disable an input is only recommendable when a sensor has a mechanical failure, giving false readings, and isn't possible to physically unplug it.
 
 
-After sending a dowlink config frame, the next transmission of the node will be a config response frame.
+After sending a downlink config frame, the next transmission of the node will be a config response frame.
 
 
 Tested environment
 ------------------
 * RAK RUI version 1.0.0 beta
-* FW 3.0.0.14h beta
+* FIRMWARE  V 3.0.0.14.H
 * Bootloader 3.0.4 
 * RAK Device Firmware Upgrade Tool v1.4 for Ubuntu Linux
 
