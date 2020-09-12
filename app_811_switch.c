@@ -29,8 +29,6 @@ RUI_LORA_STATUS_T app_lora_status; //record status
 #define SWITCH_4		16
 
 #define LED_1			8
-#define I2C_SDA  		19
-#define I2C_SCL  		18
 #define BAT_LEVEL_CHANNEL	20
 
 #define LED_1_LPP_EN_MASK	0x80
@@ -40,6 +38,8 @@ RUI_LORA_STATUS_T app_lora_status; //record status
 #define SWITCH_4_LPP_EN_MASK	0x08
 
 const uint8_t level[2]={0,1};
+#define low     &level[0]
+#define high    &level[1]
 static uint8_t extdigints=0x00;
 static uint8_t lpp_enable_sensor_mask=0xFF;
 static uint8_t lpp_sensor_mask_after_enabled=0x00;
@@ -47,15 +47,12 @@ static uint8_t lpp_port=0x00;
 bool lpp_txperiod_pending_tx=false;
 bool lpp_sensormask_pending_tx=false;
 
-#define low     &level[0]
-#define high    &level[1]
 RUI_GPIO_ST Led_Red;  //send data successed and join indicator light
 RUI_GPIO_ST Bat_level;
 RUI_GPIO_ST Switch_One;		// ext interupt switch #1
 RUI_GPIO_ST Switch_Two;		// ext interupt switch #2
 RUI_GPIO_ST Switch_Three;	// ext interupt switch #3
 RUI_GPIO_ST Switch_Four;	// ext interupt switch #4
-RUI_I2C_ST I2c_1;
 TimerEvent_t Join_Ok_Timer;
 TimerEvent_t LoRa_send_ok_Timer;  //LoRa send out indicator light
 volatile static bool autosend_flag = false;    //auto send flag
@@ -65,8 +62,6 @@ bool IsJoiningflag= false;  //flag whether joining or not status
 bool sample_flag = false;  //flag sensor sample record for print sensor data by AT command 
 bool sample_status = false;  //current whether sample sensor completely
 bool sendfull = true;  //flag whether send all sensor data 
-
-
 
 
 void rui_lora_autosend_callback(void)  //auto_send timeout event callback
@@ -192,25 +187,13 @@ void bsp_adc_init(void)
     rui_adc_init(&Bat_level);
 
 }
-void bsp_i2c_init(void)
-{
-    I2c_1.INSTANCE_ID = 1;
-    I2c_1.PIN_SDA = I2C_SDA;
-    I2c_1.PIN_SCL = I2C_SCL;
-    I2c_1.FREQUENCY = RUI_I2C_FREQ_100K;
 
-    if(rui_i2c_init(&I2c_1) != RUI_STATUS_OK)RUI_LOG_PRINTF("I2C init error.\r\n");
-
-    rui_delay_ms(50);
-
-}
 void bsp_init(void)
 {
     bsp_led_init();
     bsp_di_init();
     bsp_adc_init();
-    bsp_i2c_init();
-    //BME680_Init();
+    
 }
 
 
@@ -341,12 +324,7 @@ void app_loop(void)
             RUI_LOG_PRINTF("Battery Voltage = %d.%d V \r\n",(uint32_t)(bsp_sensor.voltage), (uint32_t)((bsp_sensor.voltage)*1000-((int32_t)(bsp_sensor.voltage)) * 1000));
             temp=(uint16_t)round(bsp_sensor.voltage*100.0);
             lpp_data[lpp_cnt].startcnt = sensor_data_cnt;
-    
-	    //a[sensor_data_cnt++]=0x08;
-            //a[sensor_data_cnt++]=0x02;
-            //a[sensor_data_cnt++]=(temp&0xffff) >> 8;
-            //a[sensor_data_cnt++]=temp&0xff;	
-
+    	    	
     	    digvalue=0x00;        
 	    
 	    rui_gpio_rw( RUI_IF_READ, &Switch_One, &digbit );
@@ -389,48 +367,11 @@ void app_loop(void)
 	    	a[sensor_data_cnt++]=temp&0xff;	
 		lpp_port = LPP_DYNAMIC_PAYLOAD_PORT;
 	    }
-	    
-
-	    
+	    	    
 
 	    lpp_data[lpp_cnt].size = sensor_data_cnt - lpp_data[lpp_cnt].startcnt;	
             lpp_cnt++;		
-
-	// switch sensor info here!
-            if(1==0)
-            {
-                lpp_data[lpp_cnt].startcnt = sensor_data_cnt;
-                a[sensor_data_cnt++]=0x07;
-                a[sensor_data_cnt++]=0x68;
-                a[sensor_data_cnt++]=( bsp_sensor.humidity / 500 ) & 0xFF;
-                lpp_data[lpp_cnt].size = sensor_data_cnt - lpp_data[lpp_cnt].startcnt;
-                lpp_cnt++;
-
-                lpp_data[lpp_cnt].startcnt = sensor_data_cnt;	
-                a[sensor_data_cnt++]=0x06;
-                a[sensor_data_cnt++]=0x73;
-                a[sensor_data_cnt++]=(( bsp_sensor.pressure / 10 ) >> 8 ) & 0xFF;
-                a[sensor_data_cnt++]=(bsp_sensor.pressure / 10 ) & 0xFF;
-                lpp_data[lpp_cnt].size = sensor_data_cnt - lpp_data[lpp_cnt].startcnt;
-                lpp_cnt++;
-			
-                lpp_data[lpp_cnt].startcnt = sensor_data_cnt;
-                a[sensor_data_cnt++]=0x02;
-                a[sensor_data_cnt++]=0x67;
-                a[sensor_data_cnt++]=(( bsp_sensor.temperature / 10 ) >> 8 ) & 0xFF;
-                a[sensor_data_cnt++]=(bsp_sensor.temperature / 10 ) & 0xFF;
-                lpp_data[lpp_cnt].size = sensor_data_cnt - lpp_data[lpp_cnt].startcnt;
-                lpp_cnt++;
-
-                lpp_data[lpp_cnt].startcnt = sensor_data_cnt;
-                a[sensor_data_cnt++] = 0x04;
-				a[sensor_data_cnt++] = 0x02; //analog output
-				a[sensor_data_cnt++] = (((int32_t)(bsp_sensor.resis / 10)) >> 8) & 0xFF;
-				a[sensor_data_cnt++] = ((int32_t)(bsp_sensor.resis / 10 )) & 0xFF;
-                lpp_data[lpp_cnt].size = sensor_data_cnt - lpp_data[lpp_cnt].startcnt;
-                lpp_cnt++;
-            }
-
+	
 
 	        if(sensor_data_cnt != 0)
             { 
@@ -743,9 +684,7 @@ void bsp_wakeup(void)
              * user process code after exit sleep
     ******************************************************************************/
     sendfull = true;  //clear subcontract send flag
-    sample_status = false;  //clear sample flag
-    bsp_i2c_init();
-    //BME680_Init();
+    sample_status = false;  //clear sample flag    
     rui_delay_ms(50);
 }
 
