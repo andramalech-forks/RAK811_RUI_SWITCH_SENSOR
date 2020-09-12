@@ -5,12 +5,16 @@
 static RUI_RETURN_STATUS rui_return_status;
 //join cnt
 #define JOIN_MAX_CNT 			6
+#define LPP_DYNAMIC_PAYLOAD_PORT 	1
 #define LPP_PACKED_PAYLOAD_PORT 	2
 #define LPP_DEVICE_PERIOD_CONF_PORT 	11
 #define LPP_SENSOR_ENABLE_PORT 		14
 #define LPP_CONFIG_MASK_TXPERIOD 	0x02
 #define LPP_TXPERIOD_SIZE 		4
 #define LPP_SENSOR_ENABLE_SIZE 		1
+#define LPP_DATA_CHAN_1 		1
+#define LPP_DATA_CHAN_2 		2
+
 static uint8_t JoinCnt=0;
 RUI_LORA_STATUS_T app_lora_status; //record status 
 
@@ -376,12 +380,14 @@ void app_loop(void)
 	    }
 	    else
 	    {
+		a[sensor_data_cnt++]=LPP_DATA_CHAN_1;
 		a[sensor_data_cnt++]=0x00;			// Digital Inputs	(IPSO 3200)
 	    	a[sensor_data_cnt++]=digvalue;			// 7-4 irqs fired, 3-0 read  value
+		a[sensor_data_cnt++]=LPP_DATA_CHAN_2;
 	    	a[sensor_data_cnt++]=0x02;			// Analog Input		(IPSO 3202)
 	    	a[sensor_data_cnt++]=(temp&0xffff) >> 8;
 	    	a[sensor_data_cnt++]=temp&0xff;	
-		lpp_port = LPP_PACKED_PAYLOAD_PORT;
+		lpp_port = LPP_DYNAMIC_PAYLOAD_PORT;
 	    }
 	    
 
