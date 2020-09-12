@@ -323,7 +323,7 @@ void app_loop(void)
             bsp_sensor.voltage=bsp_sensor.voltage/1000.0;   //convert mV to V
             RUI_LOG_PRINTF("Battery Voltage = %d.%d V \r\n",(uint32_t)(bsp_sensor.voltage), (uint32_t)((bsp_sensor.voltage)*1000-((int32_t)(bsp_sensor.voltage)) * 1000));
             temp=(uint16_t)round(bsp_sensor.voltage*100.0);
-            lpp_data[lpp_cnt].startcnt = sensor_data_cnt;
+            //lpp_data[lpp_cnt].startcnt = sensor_data_cnt;
     	    	
     	    digvalue=0x00;        
 	    
@@ -369,8 +369,8 @@ void app_loop(void)
 	    }
 	    	    
 
-	    lpp_data[lpp_cnt].size = sensor_data_cnt - lpp_data[lpp_cnt].startcnt;	
-            lpp_cnt++;		
+	    //lpp_data[lpp_cnt].size = sensor_data_cnt - lpp_data[lpp_cnt].startcnt;	
+            //lpp_cnt++;		
 	
 
 	        if(sensor_data_cnt != 0)

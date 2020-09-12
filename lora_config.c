@@ -1405,7 +1405,7 @@ static uint32_t handle_device_status(void)
     {
         RUI_LOG_PRINTF("Battery Voltage:%d.%d V \r\n",(uint32_t)(bsp_sensor.voltage), (uint32_t)((bsp_sensor.voltage)*1000-((int32_t)(bsp_sensor.voltage)) * 1000));
 
-        RUI_LOG_PRINTF("BME680 sensor data:\r\n");
+        //RUI_LOG_PRINTF("BME680 sensor data:\r\n");
 	// switch data here!
         //RUI_LOG_PRINTF("  Humidity:%d.%d %%RH\r\n",(int32_t)(bsp_sensor.humidity/1000),(int32_t)(bsp_sensor.humidity%1000));		
         //RUI_LOG_PRINTF("  Temperature:%d.%d degree\r\n",(int32_t)(bsp_sensor.temperature/100),(int32_t)(bsp_sensor.temperature%100));	
