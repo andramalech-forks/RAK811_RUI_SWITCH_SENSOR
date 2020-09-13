@@ -72,6 +72,9 @@ Disable an input is only recommendable when a sensor has a mechanical failure, g
 
 After sending a downlink config frame, the next transmission of the node will be a config response frame.
 
+Power consumption
+------------------
+RAK811 module current in sleeping mode is around 10uA. Every closed sensor adds approx 5uA in sleep mode. So the worst case scenario with all 4 switches closed in sleep mode will be around 30uA.
 
 Tested environment
 ------------------
