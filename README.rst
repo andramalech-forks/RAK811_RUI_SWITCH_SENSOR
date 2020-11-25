@@ -74,7 +74,7 @@ After sending a downlink config frame, the next transmission of the node will be
 
 Provisioning
 ------------------
-As the code was derived from a RAK Wireless existin product, it uses de same AT commands for provisioning using UART. Here is the  `manual </docs/RAK811_AT_Command_Manual_V1.0.pdf>`_ with the complete AT commands.
+As the code was derived from a RAK Wireless existing product, it uses de same AT commands for provisioning using UART. Here is the  `manual </docs/RAK811_AT_Command_Manual_V1.0.pdf>`_ with the complete AT commands.
 
 Power consumption
 ------------------
