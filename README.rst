@@ -72,6 +72,10 @@ Disable an input is only recommendable when a sensor has a mechanical failure, g
 
 After sending a downlink config frame, the next transmission of the node will be a config response frame.
 
+Provisioning
+------------------
+As the code was derived from a RAK Wireless existin product, it uses de same AT commands for provisioning using UART. Here is the  `manual </docs/RAK811_AT_Command_Manual_V1.0.pdf>`_ with the complete AT commands.
+
 Power consumption
 ------------------
 RAK811 module current in sleeping mode is around 10uA. Every closed sensor adds approx 5uA in sleep mode. So the worst case scenario with all 4 switches closed in sleep mode will be around 30uA.
